@@ -1,15 +1,17 @@
 import './App.css'
-import Navigation from './components/Navigation'
+
 import Header from './components/Header'
-import Workspace from './components/Workspace'
+import Navigation from './components/Navigation'
+import Dashboard from './features/dashboard/Dashboard'
+
 function App() {
   return (
     <div className="app-shell">
       <Header />
 
-     <Navigation />
+      <Navigation />
 
-      <Workspace />
+      <Dashboard />
 
       <aside className="context-panel">
         <section className="card">
@@ -27,4 +29,4 @@ function App() {
   )
 }
 
-export default App 
+export default App
