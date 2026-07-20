@@ -35,31 +35,29 @@ button {
   min-height: 100vh;
 }
 
-.app {
+.app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  grid-template-rows: 72px 1fr;
+  grid-template-areas:
+    "header header header"
+    "sidebar main context";
 }
 
-.navigation {
-  min-height: 100vh;
+.sidebar {
+  grid-area: sidebar;
   padding: 28px 20px;
   background: #12243a;
   color: white;
 }
 
-.navigation h1 {
-  margin: 0 0 32px;
-  font-size: 1.35rem;
-  letter-spacing: 0.02em;
-}
-
-.navigation nav {
+.sidebar nav {
   display: grid;
   gap: 8px;
 }
 
-.navigation button {
+.nav-item {
   width: 100%;
   padding: 12px 14px;
   border: 0;
@@ -69,12 +67,18 @@ button {
   background: transparent;
 }
 
-.navigation button:hover {
+.nav-item:hover {
   background: rgba(255, 255, 255, 0.08);
   color: white;
 }
 
-.header {
+.nav-item.active {
+  color: #12243a;
+  background: white;
+}
+
+.topbar {
+  grid-area: header;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -85,16 +89,28 @@ button {
   backdrop-filter: blur(10px);
 }
 
-.header h1,
-.header h2,
-.header p {
+.topbar h1,
+.topbar h2,
+.topbar p {
   margin: 0;
 }
 
+.topbar h1 {
+  font-size: 1.5rem;
+}
+
 .workspace {
+  grid-area: main;
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 32px 36px 56px;
+}
+
+.context-panel {
+  grid-area: context;
+  padding: 32px 20px;
+  border-left: 1px solid #dfe6ee;
+  background: #eef3f8;
 }
 
 .dashboard-toggle {
@@ -553,12 +569,15 @@ progress::-moz-progress-bar {
 }
 
 @media (max-width: 900px) {
-  .app {
-    grid-template-columns: 1fr;
+  .app-shell {
+    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "sidebar main";
   }
 
-  .navigation {
-    min-height: auto;
+  .context-panel {
+    display: none;
   }
 
   .metrics-grid,
@@ -578,8 +597,31 @@ progress::-moz-progress-bar {
 .weekly-session-detail {
   grid-column: 1 / -1;
 }
-  .header {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "header"
+      "sidebar"
+      "main";
+  }
+
+  .topbar {
     padding: 0 20px;
+  }
+
+  .sidebar {
+    padding: 10px;
+  }
+
+  .sidebar nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .nav-item {
+    padding: 9px 6px;
+    text-align: center;
+    font-size: 0.75rem;
   }
 
   .workspace {

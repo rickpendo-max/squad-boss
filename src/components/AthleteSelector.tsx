@@ -1,4 +1,4 @@
-import { useAthlete } from '../context/AthleteContext'
+import { useAthlete } from '../context/useAthlete'
 
 export default function AthleteSelector() {
   const {

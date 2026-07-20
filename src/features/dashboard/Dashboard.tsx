@@ -19,9 +19,9 @@ function Dashboard() {
   const [activeView, setActiveView] = useState<'glance' | 'depth'>('glance')
 
   return (
-    <>
-    <AthleteSelector />
     <main className="workspace">
+      <AthleteSelector />
+
       <div className="dashboard-toggle">
         <button
           className={activeView === 'glance' ? 'active' : ''}
@@ -204,7 +204,6 @@ function Dashboard() {
         </section>
       )}
     </main>
-    </>
   )
 }
 
