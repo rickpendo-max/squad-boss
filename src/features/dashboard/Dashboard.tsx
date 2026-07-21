@@ -206,7 +206,17 @@ function Dashboard() {
 </Card>
 
           <Card eyebrow="Performance" title="Test Results">
-            <p>Testing module coming soon.</p>
+            {selectedAthlete.testing.length > 0 ? (
+              selectedAthlete.testing.map((testResult) => (
+                <p key={`${testResult.date}-${testResult.test}`}>
+                  <strong>{testResult.test}</strong>
+                  <br />
+                  {testResult.date}: {testResult.result}
+                </p>
+              ))
+            ) : (
+              <p>No test results recorded.</p>
+            )}
           </Card>
 
           <Card eyebrow="Block objectives" title="Target Sessions This Block">

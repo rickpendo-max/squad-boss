@@ -1,11 +1,17 @@
 import './App.css'
 
+import { useState } from 'react'
+
 import Header from './components/Header'
 import Navigation from './components/Navigation'
 import { useAthlete } from './context/useAthlete'
+import AthleteProfile from './features/athlete/AthleteProfile'
 import Dashboard from './features/dashboard/Dashboard'
 
 function App() {
+  const [activeView, setActiveView] = useState<
+    'dashboard' | 'athlete-profile'
+  >('dashboard')
   const { selectedAthlete } = useAthlete()
   const coachNotes = [...selectedAthlete.coachNotes].sort((a, b) =>
     b.date.localeCompare(a.date),
@@ -15,9 +21,9 @@ function App() {
     <div className="app-shell">
       <Header />
 
-      <Navigation />
+      <Navigation activeView={activeView} onNavigate={setActiveView} />
 
-      <Dashboard />
+      {activeView === 'dashboard' ? <Dashboard /> : <AthleteProfile />}
 
       <aside className="context-panel">
         <section className="card">

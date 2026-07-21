@@ -1,4 +1,4 @@
-import type { Athlete } from '../types/athlete'
+import type { Athlete } from '../types/athlete/index'
 
 export const athletes: Athlete[] = [
   {
@@ -65,6 +65,7 @@ export const athletes: Athlete[] = [
     id: 'maddie-mcternan',
     firstName: 'Maddie',
     lastName: 'McTernan',
+    fullName: 'Maddie McTernan',
 
     status: 'Ready',
     statusNote: 'Full training',
@@ -87,6 +88,15 @@ export const athletes: Athlete[] = [
         time: '1:10.82',
       },
     ],
+    currentPerformancePriorities: ['Race-pace work', 'Back-end speed'],
+    technicalStrengths: ['Back-end speed', 'Suited race work'],
+    performanceRisks: [],
+
+    blockPurpose: 'Race-pace work',
+    currentTrainingFocus: ['Back-end speed', 'Suited race work'],
+
+    mainUpcomingCompetition: 'Para Pan Pacs',
+    targetEvents: ['200 Free', '100 Back', '100 Free'],
 
     readiness: {
       recovery: 8,
@@ -115,6 +125,22 @@ export const athletes: Athlete[] = [
         note: 'Strong back-end speed and good suited race work.',
       },
     ],
+    currentCoachingPriorities: ['Back-end speed', 'Suited race work'],
+    recentObservations: [
+      'Strong back-end speed and good suited race work.',
+    ],
+    alerts: [],
+    compass: {
+      currentDirection: 'Race Pace',
+      performancePriorities: ['Race-pace work', 'Back-end speed'],
+      constraints: [],
+      keyDecisions: [],
+      evidence: [
+        'Responding well to race-pace work.',
+        'Back-End Speed: Target achieved (2026-07-12)',
+        'Strong back-end speed and good suited race work.',
+      ],
+    },
   },
 
   {
