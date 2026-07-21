@@ -2,9 +2,15 @@ import './App.css'
 
 import Header from './components/Header'
 import Navigation from './components/Navigation'
+import { useAthlete } from './context/useAthlete'
 import Dashboard from './features/dashboard/Dashboard'
 
 function App() {
+  const { selectedAthlete } = useAthlete()
+  const coachNotes = [...selectedAthlete.coachNotes].sort((a, b) =>
+    b.date.localeCompare(a.date),
+  )
+
   return (
     <div className="app-shell">
       <Header />
@@ -16,7 +22,11 @@ function App() {
       <aside className="context-panel">
         <section className="card">
           <h2>Notes</h2>
-          <p>Latest coach observations appear here.</p>
+          {coachNotes.map((coachNote) => (
+            <p key={`${coachNote.date}-${coachNote.note}`}>
+              {coachNote.note}
+            </p>
+          ))}
         </section>
 
         <section className="card">

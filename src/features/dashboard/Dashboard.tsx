@@ -6,6 +6,8 @@ import BlockTimeline from '../../components/BlockTimeline'
 
 import { dashboardData } from '../../data/dashboard'
 import { trainingBlock } from '../../data/trainingBlock'
+import { useAthlete } from '../../context/useAthlete'
+
 function getDaysUntil(dateString: string) {
   const today = new Date()
   const target = new Date(dateString)
@@ -17,6 +19,11 @@ function getDaysUntil(dateString: string) {
 
 function Dashboard() {
   const [activeView, setActiveView] = useState<'glance' | 'depth'>('glance')
+  const { selectedAthlete } = useAthlete()
+  const currentBlock = selectedAthlete.currentBlock ?? trainingBlock.name
+  const coachNotes = [...selectedAthlete.coachNotes].sort((a, b) =>
+    b.date.localeCompare(a.date),
+  )
 
   return (
     <main className="workspace">
@@ -80,18 +87,20 @@ function Dashboard() {
               <div className="coach-notes">
                 <span>Coach notes</span>
 
-                {dashboardData.currentSession.coachNotes.map((note) => (
-                  <p key={note}>• {note}</p>
+                {coachNotes.map((coachNote) => (
+                  <p key={`${coachNote.date}-${coachNote.note}`}>
+                    • {coachNote.note}
+                  </p>
                 ))}
               </div>
             </Card>
           </div>
 
           <div className="glance-side">
-            <Card eyebrow="Training block" title={trainingBlock.name}>
+            <Card eyebrow="Training block" title={currentBlock}>
               <BlockTimeline
                 previousBlock={trainingBlock.previousBlock}
-                currentBlock={trainingBlock.name}
+                currentBlock={currentBlock}
                 nextBlock={trainingBlock.nextBlock}
               />
 
@@ -119,20 +128,24 @@ function Dashboard() {
         <section className="depth-layout">
           <Card eyebrow="Athlete monitoring" title="Squad Readiness">
             <div className="readiness-list">
-              {dashboardData.readiness.map((athlete) => (
-                <div className="readiness-item" key={athlete.athlete}>
-                  <div>
-                    <strong>{athlete.athlete}</strong>
-                    <span>{athlete.note}</span>
-                  </div>
-
-                  <span
-                    className={`readiness-status ${athlete.status.toLowerCase()}`}
-                  >
-                    {athlete.status}
+              <div className="readiness-item" key={selectedAthlete.id}>
+                <div>
+                  <strong>
+                    {selectedAthlete.firstName} {selectedAthlete.lastName}
+                  </strong>
+                  <span>
+                    {selectedAthlete.readiness?.note ??
+                      selectedAthlete.statusNote ??
+                      'No readiness note recorded'}
                   </span>
                 </div>
-              ))}
+
+                <span
+                  className={`readiness-status ${selectedAthlete.status.toLowerCase()}`}
+                >
+                  {selectedAthlete.status}
+                </span>
+              </div>
             </div>
           </Card>
 
