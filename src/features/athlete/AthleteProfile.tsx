@@ -3,6 +3,7 @@ import { useState } from 'react'
 import AthleteSelector from '../../components/AthleteSelector'
 import Card from '../../components/Card'
 import { useAthlete } from '../../context/useAthlete'
+import ObservationPanel from './ObservationPanel'
 
 function displayList(values?: string[]) {
   return values?.length ? values.join(', ') : 'Not recorded'
@@ -20,6 +21,8 @@ function AthleteProfile() {
       <AthleteSelector />
 
       <section className="depth-layout">
+        <ObservationPanel athleteId={selectedAthlete.id} />
+
         <Card eyebrow="Athlete details" title="Profile">
           <p><strong>ID:</strong> {selectedAthlete.id}</p>
           <p><strong>Full name:</strong> {fullName}</p>

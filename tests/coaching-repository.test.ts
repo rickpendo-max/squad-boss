@@ -161,3 +161,99 @@ test('rejects active Decisions missing required lifecycle values', () => {
 test('preserves first-athlete default selection behaviour', () => {
   assert.equal(getInitialAthlete(coachingRepository).id, athletes[0].id)
 })
+
+function createObservationRepository(existingObservations: Observation[] = []) {
+  let timestampIndex = 0
+  const timestamps = [
+    '2026-07-21T00:00:00Z',
+    '2026-07-22T00:00:00Z',
+  ]
+
+  return new InMemoryCoachingRepository(
+    {
+      athletes: [sam, maddie],
+      observations: existingObservations,
+      interpretations: [],
+      priorities: [],
+      decisions: [],
+    },
+    {
+      createId: () => 'created-observation',
+      now: () => timestamps[timestampIndex++] ?? timestamps.at(-1)!,
+    },
+  )
+}
+
+const validObservationInput = {
+  athleteId: sam.id,
+  occurredAt: '2026-07-20T06:00:00Z',
+  sourceType: 'coach' as const,
+  contextType: 'training' as const,
+  summary: 'Synthetic repository test observation',
+  createdBy: 'coach-1',
+}
+
+test('creates an Observation through the repository', () => {
+  const repository = createObservationRepository()
+  const created = repository.createObservation(validObservationInput)
+
+  assert.equal(created.id, 'created-observation')
+  assert.equal(created.status, 'active')
+  assert.equal(created.createdAt, '2026-07-21T00:00:00Z')
+  assert.equal(created.updatedAt, created.createdAt)
+  assert.deepEqual(repository.listObservationsForAthlete(sam.id), [created])
+})
+
+test('rejects Observation creation when required values are empty', () => {
+  for (const invalid of [
+    { ...validObservationInput, summary: ' ' },
+    { ...validObservationInput, occurredAt: '' },
+    { ...validObservationInput, sourceType: '' as never },
+    { ...validObservationInput, contextType: '' as never },
+  ]) {
+    const repository = createObservationRepository()
+    assert.throws(() => repository.createObservation(invalid), /required/)
+  }
+})
+
+test('returns Observation history newest first', () => {
+  const older = {
+    ...observation,
+    id: 'older-observation',
+    occurredAt: '2026-07-19T00:00:00Z',
+  }
+  const newer = {
+    ...observation,
+    id: 'newer-observation',
+    occurredAt: '2026-07-21T00:00:00Z',
+  }
+  const repository = createObservationRepository([older, newer])
+
+  assert.deepEqual(
+    repository
+      .listObservationsForAthlete(sam.id)
+      .map((record) => record.id),
+    ['newer-observation', 'older-observation'],
+  )
+})
+
+test('updates an existing Observation while preserving its ownership', () => {
+  const repository = createObservationRepository([{ ...observation }])
+  const updated = repository.updateObservation({
+    id: observation.id,
+    occurredAt: '2026-07-21T06:00:00Z',
+    sourceType: 'athlete',
+    contextType: 'wellbeing',
+    summary: 'Updated synthetic observation',
+    status: 'superseded',
+    updatedBy: 'coach-2',
+  })
+
+  assert.equal(updated.athleteId, observation.athleteId)
+  assert.equal(updated.createdAt, observation.createdAt)
+  assert.equal(updated.createdBy, observation.createdBy)
+  assert.equal(updated.updatedAt, '2026-07-21T00:00:00Z')
+  assert.equal(updated.updatedBy, 'coach-2')
+  assert.equal(updated.summary, 'Updated synthetic observation')
+  assert.equal(updated.status, 'superseded')
+})

@@ -12,7 +12,11 @@ import type {
   Observation,
   Priority,
 } from '../types/coaching'
-import type { CoachingRepository } from './coaching-repository'
+import type {
+  CoachingRepository,
+  CreateObservationInput,
+  UpdateObservationInput,
+} from './coaching-repository'
 
 export interface InMemoryCoachingData {
   athletes: Athlete[]
@@ -20,6 +24,11 @@ export interface InMemoryCoachingData {
   interpretations: Interpretation[]
   priorities: Priority[]
   decisions: Decision[]
+}
+
+interface InMemoryCoachingDependencies {
+  createId: () => string
+  now: () => string
 }
 
 function requireValue(value: string, field: string, recordId: string) {
@@ -40,11 +49,41 @@ function validateConfidence(
   }
 }
 
+function validateObservation(
+  observation: Pick<
+    Observation,
+    | 'id'
+    | 'athleteId'
+    | 'occurredAt'
+    | 'sourceType'
+    | 'contextType'
+    | 'summary'
+    | 'createdBy'
+    | 'updatedBy'
+  >,
+) {
+  requireValue(observation.athleteId, 'athleteId', observation.id)
+  requireValue(observation.occurredAt, 'occurredAt', observation.id)
+  requireValue(observation.sourceType, 'sourceType', observation.id)
+  requireValue(observation.contextType, 'contextType', observation.id)
+  requireValue(observation.summary, 'summary', observation.id)
+  requireValue(observation.createdBy, 'createdBy', observation.id)
+  requireValue(observation.updatedBy, 'updatedBy', observation.id)
+}
+
 export class InMemoryCoachingRepository implements CoachingRepository {
   private readonly data: InMemoryCoachingData
+  private readonly dependencies: InMemoryCoachingDependencies
 
-  constructor(data: InMemoryCoachingData) {
+  constructor(
+    data: InMemoryCoachingData,
+    dependencies: InMemoryCoachingDependencies = {
+      createId: () => crypto.randomUUID(),
+      now: () => new Date().toISOString(),
+    },
+  ) {
     this.data = data
+    this.dependencies = dependencies
     this.validate()
   }
 
@@ -57,9 +96,53 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   listObservationsForAthlete(athleteId: string) {
-    return this.data.observations.filter(
-      (observation) => observation.athleteId === athleteId,
+    return this.data.observations
+      .filter((observation) => observation.athleteId === athleteId)
+      .toSorted(
+        (left, right) =>
+          right.occurredAt.localeCompare(left.occurredAt) ||
+          right.createdAt.localeCompare(left.createdAt),
+      )
+  }
+
+  createObservation(input: CreateObservationInput) {
+    const timestamp = this.dependencies.now()
+    const observation: Observation = {
+      ...input,
+      id: this.dependencies.createId(),
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      updatedBy: input.createdBy,
+    }
+
+    validateObservation(observation)
+    this.requireAthlete(observation.athleteId, observation.id)
+    this.data.observations.push(observation)
+
+    return observation
+  }
+
+  updateObservation(input: UpdateObservationInput) {
+    const index = this.data.observations.findIndex(
+      (observation) => observation.id === input.id,
     )
+
+    if (index === -1) {
+      throw new Error(`Observation ${input.id} was not found`)
+    }
+
+    const observation: Observation = {
+      ...this.data.observations[index],
+      ...input,
+      updatedAt: this.dependencies.now(),
+    }
+
+    validateObservation(observation)
+    this.requireAthlete(observation.athleteId, observation.id)
+    this.data.observations[index] = observation
+
+    return observation
   }
 
   listInterpretationsForAthlete(athleteId: string) {
@@ -106,6 +189,10 @@ export class InMemoryCoachingRepository implements CoachingRepository {
           `Record ${record.id} references unknown athlete ${record.athleteId}`,
         )
       }
+    }
+
+    for (const observation of this.data.observations) {
+      validateObservation(observation)
     }
 
     for (const interpretation of this.data.interpretations) {
@@ -172,6 +259,14 @@ export class InMemoryCoachingRepository implements CoachingRepository {
         requireValue(decision.ownerId, 'ownerId', decision.id)
         requireValue(decision.reviewDueAt, 'reviewDueAt', decision.id)
       }
+    }
+  }
+
+  private requireAthlete(athleteId: string, recordId: string) {
+    if (!this.data.athletes.some((athlete) => athlete.id === athleteId)) {
+      throw new Error(
+        `Record ${recordId} references unknown athlete ${athleteId}`,
+      )
     }
   }
 }

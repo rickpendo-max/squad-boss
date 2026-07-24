@@ -562,6 +562,88 @@ progress::-moz-progress-bar {
   font-weight: 800;
   text-align: center;
 }
+.observation-section + .observation-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #dfe6ee;
+}
+
+.observation-section h3 {
+  margin: 0 0 16px;
+}
+
+.observation-history,
+.observation-form {
+  display: grid;
+  gap: 12px;
+}
+
+.observation-record {
+  padding: 16px;
+  border: 1px solid #dfe6ee;
+  border-radius: 12px;
+  background: #f7f9fc;
+}
+
+.observation-record dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.observation-record dl div,
+.observation-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.observation-record dt {
+  color: #718094;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.observation-record dd {
+  margin: 0;
+  color: #24364b;
+}
+
+.observation-form label {
+  color: #24364b;
+  font-weight: 700;
+}
+
+.observation-form input,
+.observation-form select,
+.observation-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd6e2;
+  border-radius: 8px;
+  background: white;
+}
+
+.observation-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.observation-form button {
+  justify-self: start;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  background: #1769aa;
+  font-weight: 800;
+}
+
+.form-error {
+  color: #8a3030 !important;
+}
+
 @media (max-width: 1050px) {
   .glance-layout {
     grid-template-columns: 1fr;
