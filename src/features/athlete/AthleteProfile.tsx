@@ -5,6 +5,7 @@ import Card from '../../components/Card'
 import { useAthlete } from '../../context/useAthlete'
 import InterpretationPanel from './InterpretationPanel'
 import ObservationPanel from './ObservationPanel'
+import PriorityPanel from './PriorityPanel'
 
 function displayList(values?: string[]) {
   return values?.length ? values.join(', ') : 'Not recorded'
@@ -24,6 +25,10 @@ function AthleteProfile() {
       <section className="depth-layout">
         <ObservationPanel athleteId={selectedAthlete.id} />
         <InterpretationPanel athleteId={selectedAthlete.id} />
+        <PriorityPanel
+          key={selectedAthlete.id}
+          athleteId={selectedAthlete.id}
+        />
 
         <Card eyebrow="Athlete details" title="Profile">
           <p><strong>ID:</strong> {selectedAthlete.id}</p>

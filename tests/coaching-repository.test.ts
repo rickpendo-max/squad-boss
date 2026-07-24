@@ -53,9 +53,11 @@ const priority: Priority = {
   updatedAt: '2026-07-20T00:00:00Z',
   updatedBy: 'coach-1',
   interpretationIds: [interpretation.id],
-  title: 'Test priority',
+  focus: 'Test priority',
   rationale: 'Test rationale',
+  category: 'performance',
   rank: 1,
+  reviewAt: '2026-08-20T00:00:00Z',
 }
 
 const decision: Decision = {
@@ -388,4 +390,220 @@ test('updates an Interpretation and preserves ownership and creation metadata', 
   assert.equal(updated.updatedBy, 'coach-2')
   assert.equal(updated.summary, 'Updated synthetic interpretation')
   assert.equal(updated.status, 'superseded')
+})
+
+const maddieInterpretation: Interpretation = {
+  ...interpretation,
+  id: 'maddie-interpretation',
+  athleteId: maddie.id,
+  observationIds: [maddieObservation.id],
+}
+
+function createPriorityRepository(existingPriorities: Priority[] = []) {
+  let timestampIndex = 0
+  const timestamps = [
+    '2026-07-25T00:00:00Z',
+    '2026-07-26T00:00:00Z',
+  ]
+
+  return new InMemoryCoachingRepository(
+    {
+      athletes: [sam, maddie],
+      observations: [observation, maddieObservation],
+      interpretations: [interpretation, maddieInterpretation],
+      priorities: existingPriorities,
+      decisions: [],
+    },
+    {
+      createId: () => 'created-priority',
+      now: () => timestamps[timestampIndex++] ?? timestamps.at(-1)!,
+    },
+  )
+}
+
+const validPriorityInput = {
+  athleteId: sam.id,
+  interpretationIds: [interpretation.id],
+  focus: 'Synthetic test focus',
+  rationale: 'Synthetic test rationale',
+  category: 'technical' as const,
+  rank: 1,
+  reviewAt: '2026-08-25',
+  createdBy: 'coach-1',
+}
+
+test('creates an active Priority owned by the selected Athlete', () => {
+  const repository = createPriorityRepository()
+  const created = repository.createPriority(validPriorityInput)
+
+  assert.equal(created.id, 'created-priority')
+  assert.equal(created.athleteId, sam.id)
+  assert.equal(created.status, 'active')
+  assert.equal(created.createdAt, '2026-07-25T00:00:00Z')
+  assert.equal(created.updatedAt, created.createdAt)
+  assert.equal(created.updatedBy, created.createdBy)
+})
+
+test('rejects a Priority without a supporting Interpretation', () => {
+  const repository = createPriorityRepository()
+
+  assert.throws(
+    () =>
+      repository.createPriority({
+        ...validPriorityInput,
+        interpretationIds: [],
+      }),
+    /At least one Interpretation/,
+  )
+})
+
+test('rejects a Priority referencing a missing Interpretation', () => {
+  const repository = createPriorityRepository()
+
+  assert.throws(
+    () =>
+      repository.createPriority({
+        ...validPriorityInput,
+        interpretationIds: ['missing-interpretation'],
+      }),
+    /unknown Interpretation/,
+  )
+})
+
+test('rejects a Priority referencing another athlete Interpretation', () => {
+  const repository = createPriorityRepository()
+
+  assert.throws(
+    () =>
+      repository.createPriority({
+        ...validPriorityInput,
+        interpretationIds: [maddieInterpretation.id],
+      }),
+    /another athlete/,
+  )
+})
+
+test('rejects empty Priority focus, rationale and authorship', () => {
+  for (const invalid of [
+    { ...validPriorityInput, focus: ' ' },
+    { ...validPriorityInput, rationale: ' ' },
+    { ...validPriorityInput, createdBy: ' ' },
+  ]) {
+    assert.throws(
+      () => createPriorityRepository().createPriority(invalid),
+      /required/,
+    )
+  }
+})
+
+test('rejects an invalid Priority category', () => {
+  const repository = createPriorityRepository()
+
+  assert.throws(
+    () =>
+      repository.createPriority({
+        ...validPriorityInput,
+        category: 'invalid' as never,
+      }),
+    /category is invalid/,
+  )
+})
+
+test('rejects invalid Priority ranks', () => {
+  for (const rank of [0, 4, 1.5]) {
+    assert.throws(
+      () =>
+        createPriorityRepository().createPriority({
+          ...validPriorityInput,
+          rank,
+        }),
+      /rank must be 1, 2 or 3/,
+    )
+  }
+})
+
+test('rejects missing or invalid Priority review dates', () => {
+  for (const reviewAt of ['', 'not-a-date']) {
+    assert.throws(
+      () =>
+        createPriorityRepository().createPriority({
+          ...validPriorityInput,
+          reviewAt,
+        }),
+      /reviewAt/,
+    )
+  }
+})
+
+test('rejects a duplicate active Priority rank', () => {
+  const repository = createPriorityRepository([{ ...priority }])
+
+  assert.throws(
+    () => repository.createPriority(validPriorityInput),
+    /already has an active Priority at rank 1/,
+  )
+})
+
+test('rejects a fourth active Priority', () => {
+  const activePriorities = [1, 2, 3].map((rank) => ({
+    ...priority,
+    id: `priority-${rank}`,
+    rank,
+  }))
+  const repository = createPriorityRepository(activePriorities)
+
+  assert.throws(
+    () =>
+      repository.createPriority({
+        ...validPriorityInput,
+        rank: 2,
+      }),
+    /more than three active Priorities/,
+  )
+})
+
+test('returns Athlete-specific active Priorities in rank order', () => {
+  const priorities = [
+    { ...priority, id: 'rank-3', rank: 3 },
+    {
+      ...priority,
+      id: 'maddie-rank-1',
+      athleteId: maddie.id,
+      interpretationIds: [maddieInterpretation.id],
+    },
+    { ...priority, id: 'rank-1', rank: 1 },
+    { ...priority, id: 'rank-2', rank: 2 },
+  ]
+  const repository = createPriorityRepository(priorities)
+
+  assert.deepEqual(
+    repository.getPrioritiesByAthleteId(sam.id).map((record) => record.id),
+    ['rank-1', 'rank-2', 'rank-3'],
+  )
+  assert.deepEqual(
+    repository.getPrioritiesByAthleteId(maddie.id).map((record) => record.id),
+    ['maddie-rank-1'],
+  )
+})
+
+test('updates a Priority and preserves ownership and creation metadata', () => {
+  const repository = createPriorityRepository([{ ...priority }])
+  const updated = repository.updatePriority(priority.id, {
+    interpretationIds: [interpretation.id],
+    focus: 'Updated synthetic focus',
+    rationale: 'Updated synthetic rationale',
+    category: 'development',
+    rank: 2,
+    reviewAt: '2026-09-01',
+    status: 'active',
+    updatedBy: 'coach-2',
+  })
+
+  assert.equal(updated.athleteId, priority.athleteId)
+  assert.equal(updated.createdAt, priority.createdAt)
+  assert.equal(updated.createdBy, priority.createdBy)
+  assert.equal(updated.updatedAt, '2026-07-25T00:00:00Z')
+  assert.equal(updated.updatedBy, 'coach-2')
+  assert.equal(updated.focus, 'Updated synthetic focus')
+  assert.equal(updated.rank, 2)
 })

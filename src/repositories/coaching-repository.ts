@@ -9,6 +9,8 @@ import type {
   ObservationSourceType,
   ObservationStatus,
   Priority,
+  PriorityCategory,
+  PriorityStatus,
 } from '../types/coaching'
 
 export interface CreateObservationInput {
@@ -47,6 +49,28 @@ export interface UpdateInterpretationInput {
   updatedBy: string
 }
 
+export interface CreatePriorityInput {
+  athleteId: string
+  interpretationIds: string[]
+  focus: string
+  rationale: string
+  category: PriorityCategory
+  rank: number
+  reviewAt: string
+  createdBy: string
+}
+
+export interface UpdatePriorityInput {
+  interpretationIds: string[]
+  focus: string
+  rationale: string
+  category: PriorityCategory
+  rank: number
+  reviewAt: string
+  status: PriorityStatus
+  updatedBy: string
+}
+
 export interface CoachingRepository {
   listAthletes(): Athlete[]
   getAthleteById(athleteId: string): Athlete | undefined
@@ -58,5 +82,8 @@ export interface CoachingRepository {
   createInterpretation(input: CreateInterpretationInput): Interpretation
   updateInterpretation(input: UpdateInterpretationInput): Interpretation
   listPrioritiesForAthlete(athleteId: string): Priority[]
+  getPrioritiesByAthleteId(athleteId: string): Priority[]
+  createPriority(input: CreatePriorityInput): Priority
+  updatePriority(priorityId: string, input: UpdatePriorityInput): Priority
   listDecisionsForAthlete(athleteId: string): Decision[]
 }

@@ -695,6 +695,50 @@ progress::-moz-progress-bar {
   background: #e7edf3;
 }
 
+.priority-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.priority-heading h4 {
+  margin: 0;
+}
+
+.priority-rank {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: white;
+  background: #1769aa;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.overdue-indicator {
+  color: #a13535;
+  font-weight: 800;
+}
+
+.priority-form-fields {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.priority-form-fields:disabled {
+  opacity: 0.6;
+}
+
+.form-notice {
+  padding: 12px;
+  border-radius: 8px;
+  color: #765719 !important;
+  background: #fff4d6;
+}
+
 @media (max-width: 1050px) {
   .glance-layout {
     grid-template-columns: 1fr;

@@ -5,6 +5,7 @@ import {
   priorities,
 } from '../data/coaching.ts'
 import { athletes } from '../data/athletes.ts'
+import { priorityCategories } from '../types/coaching/priority.ts'
 import type { Athlete } from '../types/athlete'
 import type {
   Decision,
@@ -16,8 +17,10 @@ import type {
   CoachingRepository,
   CreateInterpretationInput,
   CreateObservationInput,
+  CreatePriorityInput,
   UpdateInterpretationInput,
   UpdateObservationInput,
+  UpdatePriorityInput,
 } from './coaching-repository'
 
 export interface InMemoryCoachingData {
@@ -101,6 +104,38 @@ function validateInterpretationContent(
     'Interpretation',
     interpretation.id,
   )
+}
+
+function validatePriorityContent(priority: Priority) {
+  requireValue(priority.athleteId, 'athleteId', priority.id)
+  requireValue(priority.focus, 'focus', priority.id)
+  requireValue(priority.rationale, 'rationale', priority.id)
+  requireValue(priority.category, 'category', priority.id)
+  requireValue(priority.reviewAt, 'reviewAt', priority.id)
+  requireValue(priority.createdBy, 'createdBy', priority.id)
+  requireValue(priority.updatedBy, 'updatedBy', priority.id)
+
+  if (priority.interpretationIds.length === 0) {
+    throw new Error(
+      `At least one Interpretation is required for Priority ${priority.id}`,
+    )
+  }
+
+  if (
+    !priorityCategories.includes(
+      priority.category as (typeof priorityCategories)[number],
+    )
+  ) {
+    throw new Error(`Priority ${priority.id} category is invalid`)
+  }
+
+  if (!Number.isInteger(priority.rank) || priority.rank < 1 || priority.rank > 3) {
+    throw new Error(`Priority ${priority.id} rank must be 1, 2 or 3`)
+  }
+
+  if (Number.isNaN(Date.parse(priority.reviewAt))) {
+    throw new Error(`Priority ${priority.id} reviewAt must be a valid date`)
+  }
 }
 
 export class InMemoryCoachingRepository implements CoachingRepository {
@@ -234,9 +269,74 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   listPrioritiesForAthlete(athleteId: string) {
-    return this.data.priorities.filter(
-      (priority) => priority.athleteId === athleteId,
+    return this.getPrioritiesByAthleteId(athleteId)
+  }
+
+  getPrioritiesByAthleteId(athleteId: string) {
+    return this.data.priorities
+      .filter((priority) => priority.athleteId === athleteId)
+      .toSorted((left, right) => {
+        if (left.status === 'active' && right.status !== 'active') return -1
+        if (left.status !== 'active' && right.status === 'active') return 1
+        if (left.status === 'active' && right.status === 'active') {
+          return left.rank - right.rank
+        }
+
+        return (
+          right.updatedAt.localeCompare(left.updatedAt) ||
+          left.id.localeCompare(right.id)
+        )
+      })
+      .map((priority) => ({
+        ...priority,
+        interpretationIds: [...priority.interpretationIds],
+      }))
+  }
+
+  createPriority(input: CreatePriorityInput) {
+    const timestamp = this.dependencies.now()
+    const priority: Priority = {
+      ...input,
+      interpretationIds: [...input.interpretationIds],
+      id: this.dependencies.createId(),
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      updatedBy: input.createdBy,
+    }
+
+    validatePriorityContent(priority)
+    this.requireAthlete(priority.athleteId, priority.id)
+    this.validatePriorityInterpretations(priority)
+    this.validateActivePrioritySet(priority)
+    this.data.priorities.push(priority)
+
+    return { ...priority, interpretationIds: [...priority.interpretationIds] }
+  }
+
+  updatePriority(priorityId: string, input: UpdatePriorityInput) {
+    const index = this.data.priorities.findIndex(
+      (priority) => priority.id === priorityId,
     )
+
+    if (index === -1) {
+      throw new Error(`Priority ${priorityId} was not found`)
+    }
+
+    const priority: Priority = {
+      ...this.data.priorities[index],
+      ...input,
+      interpretationIds: [...input.interpretationIds],
+      updatedAt: this.dependencies.now(),
+    }
+
+    validatePriorityContent(priority)
+    this.requireAthlete(priority.athleteId, priority.id)
+    this.validatePriorityInterpretations(priority)
+    this.validateActivePrioritySet(priority, priorityId)
+    this.data.priorities[index] = priority
+
+    return { ...priority, interpretationIds: [...priority.interpretationIds] }
   }
 
   listDecisionsForAthlete(athleteId: string) {
@@ -286,21 +386,9 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     }
 
     for (const priority of this.data.priorities) {
-      for (const interpretationId of priority.interpretationIds) {
-        const interpretation = interpretationsById.get(interpretationId)
-
-        if (!interpretation) {
-          throw new Error(
-            `Priority ${priority.id} references unknown Interpretation ${interpretationId}`,
-          )
-        }
-
-        if (interpretation.athleteId !== priority.athleteId) {
-          throw new Error(
-            `Priority ${priority.id} cannot reference an Interpretation belonging to another athlete`,
-          )
-        }
-      }
+      validatePriorityContent(priority)
+      this.validatePriorityInterpretations(priority, interpretationsById)
+      this.validateActivePrioritySet(priority, priority.id)
     }
 
     for (const decision of this.data.decisions) {
@@ -359,6 +447,60 @@ export class InMemoryCoachingRepository implements CoachingRepository {
           `Interpretation ${interpretation.id} cannot reference an Observation belonging to another athlete`,
         )
       }
+    }
+  }
+
+  private validatePriorityInterpretations(
+    priority: Priority,
+    interpretationsById = new Map(
+      this.data.interpretations.map((interpretation) => [
+        interpretation.id,
+        interpretation,
+      ]),
+    ),
+  ) {
+    for (const interpretationId of priority.interpretationIds) {
+      const interpretation = interpretationsById.get(interpretationId)
+
+      if (!interpretation) {
+        throw new Error(
+          `Priority ${priority.id} references unknown Interpretation ${interpretationId}`,
+        )
+      }
+
+      if (interpretation.athleteId !== priority.athleteId) {
+        throw new Error(
+          `Priority ${priority.id} cannot reference an Interpretation belonging to another athlete`,
+        )
+      }
+    }
+  }
+
+  private validateActivePrioritySet(
+    priority: Priority,
+    excludedPriorityId?: string,
+  ) {
+    if (priority.status !== 'active') return
+
+    const otherActivePriorities = this.data.priorities.filter(
+      (existing) =>
+        existing.athleteId === priority.athleteId &&
+        existing.status === 'active' &&
+        existing.id !== excludedPriorityId,
+    )
+
+    if (otherActivePriorities.length >= 3) {
+      throw new Error(
+        `Athlete ${priority.athleteId} cannot have more than three active Priorities`,
+      )
+    }
+
+    if (
+      otherActivePriorities.some((existing) => existing.rank === priority.rank)
+    ) {
+      throw new Error(
+        `Athlete ${priority.athleteId} already has an active Priority at rank ${priority.rank}`,
+      )
     }
   }
 }

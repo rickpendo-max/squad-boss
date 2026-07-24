@@ -15,8 +15,10 @@ export type {
 } from './observation'
 export type {
   Priority,
+  PriorityCategory,
   PriorityStatus,
 } from './priority'
+export { priorityCategories } from './priority'
 
 import type { Decision } from './decision'
 import type { Interpretation } from './interpretation'
