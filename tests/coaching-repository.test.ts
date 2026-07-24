@@ -14,6 +14,10 @@ import type {
   Observation,
   Priority,
 } from '../src/types/coaching/index.ts'
+import type {
+  BenchmarkProfile,
+  PerformanceResult,
+} from '../src/types/performance/index.ts'
 
 const [sam, maddie] = athletes
 
@@ -606,4 +610,295 @@ test('updates a Priority and preserves ownership and creation metadata', () => {
   assert.equal(updated.updatedBy, 'coach-2')
   assert.equal(updated.focus, 'Updated synthetic focus')
   assert.equal(updated.rank, 2)
+})
+
+const performanceResult: PerformanceResult = {
+  id: 'performance-current',
+  athleteId: sam.id,
+  resultType: 'competition',
+  occurredAt: '2026-07-20T00:00:00Z',
+  event: '100 m freestyle',
+  distance: 100,
+  stroke: 'freestyle',
+  course: 'LCM',
+  totalSeconds: 56,
+  segments: [
+    {
+      segmentIndex: 1,
+      distanceFrom: 0,
+      distanceTo: 50,
+      seconds: 27,
+    },
+    {
+      segmentIndex: 2,
+      distanceFrom: 50,
+      distanceTo: 100,
+      seconds: 29,
+    },
+  ],
+  source: 'manual',
+  qualityStatus: 'valid',
+  createdAt: '2026-07-20T01:00:00Z',
+  createdBy: 'coach-1',
+}
+
+function createPerformanceRepository(
+  existingResults: PerformanceResult[] = [],
+  benchmarkProfiles: BenchmarkProfile[] = [],
+) {
+  return new InMemoryCoachingRepository(
+    {
+      athletes: [sam, maddie],
+      observations: [],
+      interpretations: [],
+      priorities: [],
+      decisions: [],
+      performanceResults: existingResults,
+      benchmarkProfiles,
+    },
+    {
+      createId: () => 'created-performance',
+      now: () => '2026-07-25T00:00:00Z',
+    },
+  )
+}
+
+const validPerformanceInput = {
+  athleteId: sam.id,
+  resultType: 'competition' as const,
+  occurredAt: '2026-07-25T06:00:00Z',
+  event: '100 m freestyle',
+  distance: 100,
+  stroke: 'freestyle' as const,
+  course: 'LCM' as const,
+  totalSeconds: 56,
+  segments: [
+    {
+      segmentIndex: 1,
+      distanceFrom: 0,
+      distanceTo: 50,
+      seconds: 27,
+    },
+    {
+      segmentIndex: 2,
+      distanceFrom: 50,
+      distanceTo: 100,
+      seconds: 29,
+    },
+  ],
+  createdBy: 'coach-1',
+}
+
+test('creates a valid Athlete-owned Performance Result', () => {
+  const repository = createPerformanceRepository()
+  const created = repository.createPerformanceResult(validPerformanceInput)
+
+  assert.equal(created.id, 'created-performance')
+  assert.equal(created.athleteId, sam.id)
+  assert.equal(created.source, 'manual')
+  assert.equal(created.qualityStatus, 'valid')
+  assert.equal(created.createdAt, '2026-07-25T00:00:00Z')
+  assert.deepEqual(repository.getPerformanceResultsByAthleteId(sam.id), [
+    created,
+  ])
+  assert.deepEqual(repository.getPerformanceResultsByAthleteId(maddie.id), [])
+})
+
+test('rejects a Performance Result for an unknown Athlete', () => {
+  assert.throws(
+    () =>
+      createPerformanceRepository().createPerformanceResult({
+        ...validPerformanceInput,
+        athleteId: 'unknown-athlete',
+      }),
+    /unknown athlete/,
+  )
+})
+
+test('rejects a non-positive Performance Result total', () => {
+  for (const totalSeconds of [0, -1]) {
+    assert.throws(
+      () =>
+        createPerformanceRepository().createPerformanceResult({
+          ...validPerformanceInput,
+          totalSeconds,
+        }),
+      /total must be positive/,
+    )
+  }
+})
+
+test('rejects missing or invalid Performance Result splits', () => {
+  assert.throws(
+    () =>
+      createPerformanceRepository().createPerformanceResult({
+        ...validPerformanceInput,
+        segments: [],
+      }),
+    /at least one segment/,
+  )
+  assert.throws(
+    () =>
+      createPerformanceRepository().createPerformanceResult({
+        ...validPerformanceInput,
+        segments: [
+          { ...validPerformanceInput.segments[0], seconds: 0 },
+          validPerformanceInput.segments[1],
+        ],
+      }),
+    /segment times must be positive/,
+  )
+})
+
+test('rejects invalid segment coverage and totals outside tolerance', () => {
+  assert.throws(
+    () =>
+      createPerformanceRepository().createPerformanceResult({
+        ...validPerformanceInput,
+        segments: [
+          validPerformanceInput.segments[0],
+          {
+            ...validPerformanceInput.segments[1],
+            distanceFrom: 60,
+          },
+        ],
+      }),
+    /valid and ordered/,
+  )
+  assert.throws(
+    () =>
+      createPerformanceRepository().createPerformanceResult({
+        ...validPerformanceInput,
+        totalSeconds: 57,
+      }),
+    /sum to total within 0.05 seconds/,
+  )
+})
+
+test('retrieves Performance Results newest first', () => {
+  const older = {
+    ...performanceResult,
+    id: 'older-performance',
+    occurredAt: '2026-07-18T00:00:00Z',
+  }
+  const newer = {
+    ...performanceResult,
+    id: 'newer-performance',
+    occurredAt: '2026-07-22T00:00:00Z',
+  }
+  const repository = createPerformanceRepository([older, newer])
+
+  assert.deepEqual(
+    repository
+      .getPerformanceResultsByAthleteId(sam.id)
+      .map((result) => result.id),
+    ['newer-performance', 'older-performance'],
+  )
+})
+
+test('matches only a compatible previous Performance Result', () => {
+  const previous = {
+    ...performanceResult,
+    id: 'previous-compatible',
+    occurredAt: '2026-07-19T00:00:00Z',
+    totalSeconds: 57,
+    segments: [
+      { ...performanceResult.segments[0], seconds: 27.5 },
+      { ...performanceResult.segments[1], seconds: 29.5 },
+    ],
+  }
+  const incompatible = {
+    ...previous,
+    id: 'incompatible-result',
+    occurredAt: '2026-07-19T12:00:00Z',
+    stroke: 'backstroke' as const,
+  }
+  const repository = createPerformanceRepository([
+    previous,
+    incompatible,
+    performanceResult,
+  ])
+  const comparison = repository.getPerformanceComparison(performanceResult.id)
+
+  assert.equal(comparison.previousResultId, previous.id)
+  assert.equal(comparison.previousTotalDifferenceSeconds, -1)
+  assert.equal(comparison.segmentComparisons[0].previousDifferenceSeconds, -0.5)
+})
+
+test('selects the fastest valid comparable stored result as PB', () => {
+  const storedPb = {
+    ...performanceResult,
+    id: 'stored-pb',
+    occurredAt: '2026-07-18T00:00:00Z',
+    totalSeconds: 54,
+    segments: [
+      { ...performanceResult.segments[0], seconds: 26 },
+      { ...performanceResult.segments[1], seconds: 28 },
+    ],
+  }
+  const excludedFaster = {
+    ...storedPb,
+    id: 'excluded-faster',
+    totalSeconds: 53,
+    segments: [
+      { ...performanceResult.segments[0], seconds: 25.5 },
+      { ...performanceResult.segments[1], seconds: 27.5 },
+    ],
+    qualityStatus: 'excluded' as const,
+  }
+  const repository = createPerformanceRepository([
+    storedPb,
+    excludedFaster,
+    performanceResult,
+  ])
+  const comparison = repository.getPerformanceComparison(performanceResult.id)
+
+  assert.equal(comparison.pbResultId, storedPb.id)
+  assert.equal(comparison.pbTotalDifferenceSeconds, 2)
+})
+
+test('uses positive differences for slower and negative for faster', () => {
+  const previous = {
+    ...performanceResult,
+    id: 'previous-result',
+    occurredAt: '2026-07-18T00:00:00Z',
+    totalSeconds: 56,
+    segments: [
+      { ...performanceResult.segments[0], seconds: 28 },
+      { ...performanceResult.segments[1], seconds: 28 },
+    ],
+  }
+  const repository = createPerformanceRepository([
+    previous,
+    performanceResult,
+  ])
+  const comparison = repository.getPerformanceComparison(performanceResult.id)
+
+  assert.equal(comparison.segmentComparisons[0].previousDifferenceSeconds, -1)
+  assert.equal(comparison.segmentComparisons[1].previousDifferenceSeconds, 1)
+  assert.equal(
+    comparison.largestDeteriorationFromPrevious?.segmentIndex,
+    2,
+  )
+  assert.equal(comparison.largestImprovementFromPrevious?.segmentIndex, 1)
+  assert.match(
+    comparison.findings.map((finding) => finding.summary).join(' '),
+    /improved by 1.00 s/,
+  )
+  assert.match(
+    comparison.findings.map((finding) => finding.summary).join(' '),
+    /1.00 s slower/,
+  )
+})
+
+test('handles an unavailable QAS benchmark without error', () => {
+  const repository = createPerformanceRepository([performanceResult])
+  const comparison = repository.getPerformanceComparison(performanceResult.id)
+
+  assert.equal(comparison.benchmarkMatchStatus, 'unavailable')
+  assert.equal(comparison.benchmarkProfileId, undefined)
+  assert.match(
+    comparison.findings.map((finding) => finding.summary).join(' '),
+    /No applicable QAS benchmark available/,
+  )
 })

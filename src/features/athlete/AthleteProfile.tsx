@@ -5,6 +5,7 @@ import Card from '../../components/Card'
 import { useAthlete } from '../../context/useAthlete'
 import InterpretationPanel from './InterpretationPanel'
 import ObservationPanel from './ObservationPanel'
+import PerformanceComparisonPanel from './PerformanceComparisonPanel'
 import PriorityPanel from './PriorityPanel'
 
 function displayList(values?: string[]) {
@@ -22,14 +23,24 @@ function AthleteProfile() {
     <main className="workspace">
       <AthleteSelector />
 
-      <section className="depth-layout">
-        <ObservationPanel athleteId={selectedAthlete.id} />
-        <InterpretationPanel athleteId={selectedAthlete.id} />
-        <PriorityPanel
-          key={selectedAthlete.id}
-          athleteId={selectedAthlete.id}
-        />
+      <PerformanceComparisonPanel
+        key={selectedAthlete.id}
+        athleteId={selectedAthlete.id}
+      />
 
+      <details className="coaching-record">
+        <summary>Coaching Record</summary>
+        <div className="coaching-record-content">
+          <ObservationPanel athleteId={selectedAthlete.id} />
+          <InterpretationPanel athleteId={selectedAthlete.id} />
+          <PriorityPanel
+            key={selectedAthlete.id}
+            athleteId={selectedAthlete.id}
+          />
+        </div>
+      </details>
+
+      <section className="depth-layout">
         <Card eyebrow="Athlete details" title="Profile">
           <p><strong>ID:</strong> {selectedAthlete.id}</p>
           <p><strong>Full name:</strong> {fullName}</p>

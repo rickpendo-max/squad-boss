@@ -1,5 +1,13 @@
 import type { Athlete } from '../types/athlete'
 import type {
+  PerformanceComparison,
+  PerformanceCourse,
+  PerformanceResult,
+  PerformanceResultType,
+  PerformanceSegment,
+  SwimmingStroke,
+} from '../types/performance'
+import type {
   Confidence,
   Decision,
   Interpretation,
@@ -71,6 +79,19 @@ export interface UpdatePriorityInput {
   updatedBy: string
 }
 
+export interface CreatePerformanceResultInput {
+  athleteId: string
+  resultType: PerformanceResultType
+  occurredAt: string
+  event: string
+  distance: number
+  stroke: SwimmingStroke
+  course: PerformanceCourse
+  totalSeconds: number
+  segments: PerformanceSegment[]
+  createdBy: string
+}
+
 export interface CoachingRepository {
   listAthletes(): Athlete[]
   getAthleteById(athleteId: string): Athlete | undefined
@@ -86,4 +107,9 @@ export interface CoachingRepository {
   createPriority(input: CreatePriorityInput): Priority
   updatePriority(priorityId: string, input: UpdatePriorityInput): Priority
   listDecisionsForAthlete(athleteId: string): Decision[]
+  getPerformanceResultsByAthleteId(athleteId: string): PerformanceResult[]
+  createPerformanceResult(
+    input: CreatePerformanceResultInput,
+  ): PerformanceResult
+  getPerformanceComparison(resultId: string): PerformanceComparison
 }

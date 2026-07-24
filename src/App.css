@@ -739,6 +739,96 @@ progress::-moz-progress-bar {
   background: #fff4d6;
 }
 
+.performance-section + .performance-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #dfe6ee;
+}
+
+.performance-latest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+}
+
+.split-entry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #cbd6e2;
+  border-radius: 8px;
+}
+
+.comparison-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.comparison-summary div {
+  padding: 12px;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+
+.comparison-summary dt {
+  color: #718094;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.comparison-summary dd {
+  margin: 4px 0 0;
+  color: #24364b;
+  font-weight: 700;
+}
+
+.comparison-table-wrap {
+  overflow-x: auto;
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comparison-table th,
+.comparison-table td {
+  padding: 10px;
+  border-bottom: 1px solid #dfe6ee;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.performance-findings {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+}
+
+.coaching-record {
+  margin-bottom: 20px;
+  border: 1px solid #dfe6ee;
+  border-radius: 12px;
+  background: white;
+}
+
+.coaching-record > summary {
+  padding: 16px 20px;
+  color: #24364b;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.coaching-record-content {
+  padding: 0 20px 4px;
+}
+
 @media (max-width: 1050px) {
   .glance-layout {
     grid-template-columns: 1fr;

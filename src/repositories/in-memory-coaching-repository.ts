@@ -2,9 +2,12 @@ import {
   decisions,
   interpretations,
   observations,
+  performanceResults,
   priorities,
 } from '../data/coaching.ts'
 import { athletes } from '../data/athletes.ts'
+import { qasPacingBenchmarkProfiles } from '../data/benchmarks/qas-pacing-benchmarks.ts'
+import { calculatePerformanceComparison } from '../domain/performance-comparison.ts'
 import { priorityCategories } from '../types/coaching/priority.ts'
 import type { Athlete } from '../types/athlete'
 import type {
@@ -14,9 +17,14 @@ import type {
   Priority,
 } from '../types/coaching'
 import type {
+  BenchmarkProfile,
+  PerformanceResult,
+} from '../types/performance'
+import type {
   CoachingRepository,
   CreateInterpretationInput,
   CreateObservationInput,
+  CreatePerformanceResultInput,
   CreatePriorityInput,
   UpdateInterpretationInput,
   UpdateObservationInput,
@@ -29,6 +37,8 @@ export interface InMemoryCoachingData {
   interpretations: Interpretation[]
   priorities: Priority[]
   decisions: Decision[]
+  performanceResults?: PerformanceResult[]
+  benchmarkProfiles?: BenchmarkProfile[]
 }
 
 interface InMemoryCoachingDependencies {
@@ -135,6 +145,75 @@ function validatePriorityContent(priority: Priority) {
 
   if (Number.isNaN(Date.parse(priority.reviewAt))) {
     throw new Error(`Priority ${priority.id} reviewAt must be a valid date`)
+  }
+}
+
+const RESULT_TOTAL_TOLERANCE_SECONDS = 0.05
+
+function validatePerformanceResult(result: PerformanceResult) {
+  requireValue(result.athleteId, 'athleteId', result.id)
+  requireValue(result.event, 'event', result.id)
+  requireValue(result.occurredAt, 'occurredAt', result.id)
+  requireValue(result.createdBy, 'createdBy', result.id)
+
+  if (!Number.isFinite(result.totalSeconds) || result.totalSeconds <= 0) {
+    throw new Error(`Performance Result ${result.id} total must be positive`)
+  }
+
+  if (result.segments.length === 0) {
+    throw new Error(
+      `Performance Result ${result.id} requires at least one segment`,
+    )
+  }
+
+  let expectedDistanceFrom = 0
+
+  for (const [index, segment] of result.segments.entries()) {
+    if (
+      segment.segmentIndex !== index + 1 ||
+      segment.distanceFrom !== expectedDistanceFrom ||
+      segment.distanceTo <= segment.distanceFrom ||
+      segment.distanceTo > result.distance
+    ) {
+      throw new Error(
+        `Performance Result ${result.id} segment distances must be valid and ordered`,
+      )
+    }
+
+    if (!Number.isFinite(segment.seconds) || segment.seconds <= 0) {
+      throw new Error(
+        `Performance Result ${result.id} segment times must be positive`,
+      )
+    }
+
+    expectedDistanceFrom = segment.distanceTo
+  }
+
+  if (expectedDistanceFrom !== result.distance) {
+    throw new Error(
+      `Performance Result ${result.id} segments must cover the event distance`,
+    )
+  }
+
+  const segmentTotal = result.segments.reduce(
+    (total, segment) => total + segment.seconds,
+    0,
+  )
+
+  if (
+    Math.abs(segmentTotal - result.totalSeconds) >
+    RESULT_TOTAL_TOLERANCE_SECONDS
+  ) {
+    throw new Error(
+      `Performance Result ${result.id} segments must sum to total within ${RESULT_TOTAL_TOLERANCE_SECONDS} seconds`,
+    )
+  }
+}
+
+function copyPerformanceResult(result: PerformanceResult): PerformanceResult {
+  return {
+    ...result,
+    segments: result.segments.map((segment) => ({ ...segment })),
   }
 }
 
@@ -345,6 +424,58 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     )
   }
 
+  getPerformanceResultsByAthleteId(athleteId: string) {
+    return (this.data.performanceResults ?? [])
+      .filter((result) => result.athleteId === athleteId)
+      .toSorted(
+        (left, right) =>
+          right.occurredAt.localeCompare(left.occurredAt) ||
+          right.createdAt.localeCompare(left.createdAt),
+      )
+      .map(copyPerformanceResult)
+  }
+
+  createPerformanceResult(input: CreatePerformanceResultInput) {
+    const result: PerformanceResult = {
+      ...input,
+      segments: input.segments.map((segment) => ({ ...segment })),
+      id: this.dependencies.createId(),
+      source: 'manual',
+      qualityStatus: 'valid',
+      createdAt: this.dependencies.now(),
+    }
+
+    validatePerformanceResult(result)
+    this.requireAthlete(result.athleteId, result.id)
+    this.data.performanceResults ??= []
+    this.data.performanceResults.push(result)
+
+    return copyPerformanceResult(result)
+  }
+
+  getPerformanceComparison(resultId: string) {
+    const result = (this.data.performanceResults ?? []).find(
+      (candidate) => candidate.id === resultId,
+    )
+
+    if (!result) {
+      throw new Error(`Performance Result ${resultId} was not found`)
+    }
+
+    const athlete = this.getAthleteById(result.athleteId)
+
+    if (!athlete) {
+      throw new Error(`Athlete ${result.athleteId} was not found`)
+    }
+
+    return calculatePerformanceComparison(
+      result,
+      this.data.performanceResults ?? [],
+      athlete,
+      this.data.benchmarkProfiles ?? [],
+    )
+  }
+
   private validate() {
     const athleteIds = new Set(this.data.athletes.map((athlete) => athlete.id))
     const observationsById = new Map(
@@ -371,6 +502,11 @@ export class InMemoryCoachingRepository implements CoachingRepository {
           `Record ${record.id} references unknown athlete ${record.athleteId}`,
         )
       }
+    }
+
+    for (const result of this.data.performanceResults ?? []) {
+      validatePerformanceResult(result)
+      this.requireAthlete(result.athleteId, result.id)
     }
 
     for (const observation of this.data.observations) {
@@ -511,4 +647,6 @@ export const coachingRepository = new InMemoryCoachingRepository({
   interpretations,
   priorities,
   decisions,
+  performanceResults,
+  benchmarkProfiles: qasPacingBenchmarkProfiles,
 })
