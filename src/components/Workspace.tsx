@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { athletes } from '../data/athletes'
+import { coachingRepository } from '../repositories/in-memory-coaching-repository'
+
+const athletes = coachingRepository.listAthletes()
 
 function Workspace() {
   const [selectedAthlete, setSelectedAthlete] = useState(1)
