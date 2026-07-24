@@ -257,3 +257,135 @@ test('updates an existing Observation while preserving its ownership', () => {
   assert.equal(updated.summary, 'Updated synthetic observation')
   assert.equal(updated.status, 'superseded')
 })
+
+const maddieObservation: Observation = {
+  ...observation,
+  id: 'maddie-observation',
+  athleteId: maddie.id,
+}
+
+function createInterpretationRepository(
+  existingInterpretations: Interpretation[] = [],
+) {
+  let timestampIndex = 0
+  const timestamps = [
+    '2026-07-23T00:00:00Z',
+    '2026-07-24T00:00:00Z',
+  ]
+
+  return new InMemoryCoachingRepository(
+    {
+      athletes: [sam, maddie],
+      observations: [observation, maddieObservation],
+      interpretations: existingInterpretations,
+      priorities: [],
+      decisions: [],
+    },
+    {
+      createId: () => 'created-interpretation',
+      now: () => timestamps[timestampIndex++] ?? timestamps.at(-1)!,
+    },
+  )
+}
+
+const validInterpretationInput = {
+  athleteId: sam.id,
+  observationIds: [observation.id],
+  summary: 'Synthetic repository test interpretation',
+  confidence: 4 as const,
+  createdBy: 'coach-1',
+}
+
+test('creates an Interpretation through the repository', () => {
+  const repository = createInterpretationRepository()
+  const created = repository.createInterpretation(validInterpretationInput)
+
+  assert.equal(created.id, 'created-interpretation')
+  assert.equal(created.status, 'active')
+  assert.deepEqual(created.observationIds, [observation.id])
+  assert.equal(created.createdAt, '2026-07-23T00:00:00Z')
+  assert.equal(created.updatedAt, created.createdAt)
+  assert.deepEqual(repository.getInterpretationsByAthleteId(sam.id), [created])
+})
+
+test('rejects an Interpretation without a supporting Observation', () => {
+  const repository = createInterpretationRepository()
+
+  assert.throws(
+    () =>
+      repository.createInterpretation({
+        ...validInterpretationInput,
+        observationIds: [],
+      }),
+    /At least one Observation/,
+  )
+})
+
+test('rejects an Interpretation referencing a missing Observation', () => {
+  const repository = createInterpretationRepository()
+
+  assert.throws(
+    () =>
+      repository.createInterpretation({
+        ...validInterpretationInput,
+        observationIds: ['missing-observation'],
+      }),
+    /unknown Observation/,
+  )
+})
+
+test('rejects an Interpretation referencing another athlete Observation', () => {
+  const repository = createInterpretationRepository()
+
+  assert.throws(
+    () =>
+      repository.createInterpretation({
+        ...validInterpretationInput,
+        observationIds: [maddieObservation.id],
+      }),
+    /another athlete/,
+  )
+})
+
+test('returns Interpretation history newest first', () => {
+  const older = {
+    ...interpretation,
+    id: 'older-interpretation',
+    createdAt: '2026-07-19T00:00:00Z',
+  }
+  const newer = {
+    ...interpretation,
+    id: 'newer-interpretation',
+    createdAt: '2026-07-21T00:00:00Z',
+  }
+  const repository = createInterpretationRepository([older, newer])
+
+  assert.deepEqual(
+    repository
+      .getInterpretationsByAthleteId(sam.id)
+      .map((record) => record.id),
+    ['newer-interpretation', 'older-interpretation'],
+  )
+})
+
+test('updates an Interpretation and preserves ownership and creation metadata', () => {
+  const repository = createInterpretationRepository([
+    { ...interpretation },
+  ])
+  const updated = repository.updateInterpretation({
+    id: interpretation.id,
+    observationIds: [observation.id],
+    summary: 'Updated synthetic interpretation',
+    confidence: 5,
+    status: 'superseded',
+    updatedBy: 'coach-2',
+  })
+
+  assert.equal(updated.athleteId, interpretation.athleteId)
+  assert.equal(updated.createdAt, interpretation.createdAt)
+  assert.equal(updated.createdBy, interpretation.createdBy)
+  assert.equal(updated.updatedAt, '2026-07-23T00:00:00Z')
+  assert.equal(updated.updatedBy, 'coach-2')
+  assert.equal(updated.summary, 'Updated synthetic interpretation')
+  assert.equal(updated.status, 'superseded')
+})

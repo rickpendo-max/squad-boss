@@ -14,7 +14,9 @@ import type {
 } from '../types/coaching'
 import type {
   CoachingRepository,
+  CreateInterpretationInput,
   CreateObservationInput,
+  UpdateInterpretationInput,
   UpdateObservationInput,
 } from './coaching-repository'
 
@@ -69,6 +71,36 @@ function validateObservation(
   requireValue(observation.summary, 'summary', observation.id)
   requireValue(observation.createdBy, 'createdBy', observation.id)
   requireValue(observation.updatedBy, 'updatedBy', observation.id)
+}
+
+function validateInterpretationContent(
+  interpretation: Pick<
+    Interpretation,
+    | 'id'
+    | 'athleteId'
+    | 'observationIds'
+    | 'summary'
+    | 'confidence'
+    | 'createdBy'
+    | 'updatedBy'
+  >,
+) {
+  requireValue(interpretation.athleteId, 'athleteId', interpretation.id)
+  requireValue(interpretation.summary, 'summary', interpretation.id)
+  requireValue(interpretation.createdBy, 'createdBy', interpretation.id)
+  requireValue(interpretation.updatedBy, 'updatedBy', interpretation.id)
+
+  if (interpretation.observationIds.length === 0) {
+    throw new Error(
+      `At least one Observation is required for Interpretation ${interpretation.id}`,
+    )
+  }
+
+  validateConfidence(
+    interpretation.confidence,
+    'Interpretation',
+    interpretation.id,
+  )
 }
 
 export class InMemoryCoachingRepository implements CoachingRepository {
@@ -146,9 +178,59 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   listInterpretationsForAthlete(athleteId: string) {
-    return this.data.interpretations.filter(
-      (interpretation) => interpretation.athleteId === athleteId,
+    return this.getInterpretationsByAthleteId(athleteId)
+  }
+
+  getInterpretationsByAthleteId(athleteId: string) {
+    return this.data.interpretations
+      .filter((interpretation) => interpretation.athleteId === athleteId)
+      .toSorted((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      )
+  }
+
+  createInterpretation(input: CreateInterpretationInput) {
+    const timestamp = this.dependencies.now()
+    const interpretation: Interpretation = {
+      ...input,
+      observationIds: [...input.observationIds],
+      id: this.dependencies.createId(),
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      updatedBy: input.createdBy,
+    }
+
+    validateInterpretationContent(interpretation)
+    this.requireAthlete(interpretation.athleteId, interpretation.id)
+    this.validateInterpretationObservations(interpretation)
+    this.data.interpretations.push(interpretation)
+
+    return interpretation
+  }
+
+  updateInterpretation(input: UpdateInterpretationInput) {
+    const index = this.data.interpretations.findIndex(
+      (interpretation) => interpretation.id === input.id,
     )
+
+    if (index === -1) {
+      throw new Error(`Interpretation ${input.id} was not found`)
+    }
+
+    const interpretation: Interpretation = {
+      ...this.data.interpretations[index],
+      ...input,
+      observationIds: [...input.observationIds],
+      updatedAt: this.dependencies.now(),
+    }
+
+    validateInterpretationContent(interpretation)
+    this.requireAthlete(interpretation.athleteId, interpretation.id)
+    this.validateInterpretationObservations(interpretation)
+    this.data.interpretations[index] = interpretation
+
+    return interpretation
   }
 
   listPrioritiesForAthlete(athleteId: string) {
@@ -196,27 +278,11 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     }
 
     for (const interpretation of this.data.interpretations) {
-      validateConfidence(
-        interpretation.confidence,
-        'Interpretation',
-        interpretation.id,
+      validateInterpretationContent(interpretation)
+      this.validateInterpretationObservations(
+        interpretation,
+        observationsById,
       )
-
-      for (const observationId of interpretation.observationIds) {
-        const observation = observationsById.get(observationId)
-
-        if (!observation) {
-          throw new Error(
-            `Interpretation ${interpretation.id} references unknown Observation ${observationId}`,
-          )
-        }
-
-        if (observation.athleteId !== interpretation.athleteId) {
-          throw new Error(
-            `Interpretation ${interpretation.id} cannot reference an Observation belonging to another athlete`,
-          )
-        }
-      }
     }
 
     for (const priority of this.data.priorities) {
@@ -267,6 +333,32 @@ export class InMemoryCoachingRepository implements CoachingRepository {
       throw new Error(
         `Record ${recordId} references unknown athlete ${athleteId}`,
       )
+    }
+  }
+
+  private validateInterpretationObservations(
+    interpretation: Interpretation,
+    observationsById = new Map(
+      this.data.observations.map((observation) => [
+        observation.id,
+        observation,
+      ]),
+    ),
+  ) {
+    for (const observationId of interpretation.observationIds) {
+      const observation = observationsById.get(observationId)
+
+      if (!observation) {
+        throw new Error(
+          `Interpretation ${interpretation.id} references unknown Observation ${observationId}`,
+        )
+      }
+
+      if (observation.athleteId !== interpretation.athleteId) {
+        throw new Error(
+          `Interpretation ${interpretation.id} cannot reference an Observation belonging to another athlete`,
+        )
+      }
     }
   }
 }

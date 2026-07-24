@@ -644,6 +644,57 @@ progress::-moz-progress-bar {
   color: #8a3030 !important;
 }
 
+.observation-record h4 {
+  margin-bottom: 8px;
+}
+
+.supporting-observations {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: #516176;
+}
+
+.observation-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #cbd6e2;
+  border-radius: 8px;
+}
+
+.observation-options legend {
+  padding: 0 4px;
+  color: #24364b;
+  font-weight: 700;
+}
+
+.observation-options label {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f7f9fc;
+  font-weight: 400;
+}
+
+.observation-options input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.observation-form .secondary-button {
+  color: #24364b;
+  background: #e7edf3;
+}
+
 @media (max-width: 1050px) {
   .glance-layout {
     grid-template-columns: 1fr;

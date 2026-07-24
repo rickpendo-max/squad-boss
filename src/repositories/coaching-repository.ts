@@ -1,7 +1,9 @@
 import type { Athlete } from '../types/athlete'
 import type {
+  Confidence,
   Decision,
   Interpretation,
+  InterpretationStatus,
   Observation,
   ObservationContextType,
   ObservationSourceType,
@@ -28,6 +30,23 @@ export interface UpdateObservationInput {
   updatedBy: string
 }
 
+export interface CreateInterpretationInput {
+  athleteId: string
+  observationIds: string[]
+  summary: string
+  confidence: Confidence
+  createdBy: string
+}
+
+export interface UpdateInterpretationInput {
+  id: string
+  observationIds: string[]
+  summary: string
+  confidence: Confidence
+  status: InterpretationStatus
+  updatedBy: string
+}
+
 export interface CoachingRepository {
   listAthletes(): Athlete[]
   getAthleteById(athleteId: string): Athlete | undefined
@@ -35,6 +54,9 @@ export interface CoachingRepository {
   createObservation(input: CreateObservationInput): Observation
   updateObservation(input: UpdateObservationInput): Observation
   listInterpretationsForAthlete(athleteId: string): Interpretation[]
+  getInterpretationsByAthleteId(athleteId: string): Interpretation[]
+  createInterpretation(input: CreateInterpretationInput): Interpretation
+  updateInterpretation(input: UpdateInterpretationInput): Interpretation
   listPrioritiesForAthlete(athleteId: string): Priority[]
   listDecisionsForAthlete(athleteId: string): Decision[]
 }

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import AthleteSelector from '../../components/AthleteSelector'
 import Card from '../../components/Card'
 import { useAthlete } from '../../context/useAthlete'
+import InterpretationPanel from './InterpretationPanel'
 import ObservationPanel from './ObservationPanel'
 
 function displayList(values?: string[]) {
@@ -22,6 +23,7 @@ function AthleteProfile() {
 
       <section className="depth-layout">
         <ObservationPanel athleteId={selectedAthlete.id} />
+        <InterpretationPanel athleteId={selectedAthlete.id} />
 
         <Card eyebrow="Athlete details" title="Profile">
           <p><strong>ID:</strong> {selectedAthlete.id}</p>
