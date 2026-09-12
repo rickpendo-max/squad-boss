@@ -30,6 +30,11 @@ import type {
   UpdateObservationInput,
   UpdatePriorityInput,
 } from './coaching-repository'
+import {
+  loadPersistedCoachingData,
+  savePersistedCoachingData,
+  type KeyValueStorage,
+} from './local-coaching-persistence.ts'
 
 export interface InMemoryCoachingData {
   athletes: Athlete[]
@@ -41,9 +46,10 @@ export interface InMemoryCoachingData {
   benchmarkProfiles?: BenchmarkProfile[]
 }
 
-interface InMemoryCoachingDependencies {
+export interface InMemoryCoachingDependencies {
   createId: () => string
   now: () => string
+  onChange?: (data: InMemoryCoachingData) => void
 }
 
 function requireValue(value: string, field: string, recordId: string) {
@@ -269,6 +275,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     validateObservation(observation)
     this.requireAthlete(observation.athleteId, observation.id)
     this.data.observations.push(observation)
+    this.persist()
 
     return observation
   }
@@ -291,6 +298,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     validateObservation(observation)
     this.requireAthlete(observation.athleteId, observation.id)
     this.data.observations[index] = observation
+    this.persist()
 
     return observation
   }
@@ -323,6 +331,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     this.requireAthlete(interpretation.athleteId, interpretation.id)
     this.validateInterpretationObservations(interpretation)
     this.data.interpretations.push(interpretation)
+    this.persist()
 
     return interpretation
   }
@@ -347,6 +356,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     this.requireAthlete(interpretation.athleteId, interpretation.id)
     this.validateInterpretationObservations(interpretation)
     this.data.interpretations[index] = interpretation
+    this.persist()
 
     return interpretation
   }
@@ -393,6 +403,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     this.validatePriorityInterpretations(priority)
     this.validateActivePrioritySet(priority)
     this.data.priorities.push(priority)
+    this.persist()
 
     return { ...priority, interpretationIds: [...priority.interpretationIds] }
   }
@@ -418,6 +429,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     this.validatePriorityInterpretations(priority)
     this.validateActivePrioritySet(priority, priorityId)
     this.data.priorities[index] = priority
+    this.persist()
 
     return { ...priority, interpretationIds: [...priority.interpretationIds] }
   }
@@ -440,6 +452,14 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   createPerformanceResult(input: CreatePerformanceResultInput) {
+    const result = this.createPerformanceResultWithoutPersisting(input)
+    this.persist()
+    return result
+  }
+
+  private createPerformanceResultWithoutPersisting(
+    input: CreatePerformanceResultInput,
+  ) {
     const result: PerformanceResult = {
       ...input,
       segments: input.segments.map((segment) => ({ ...segment })),
@@ -487,6 +507,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     validatePerformanceResult(result)
     this.requireAthlete(result.athleteId, result.id)
     performanceResults[index] = result
+    this.persist()
 
     return copyPerformanceResult(result)
   }
@@ -505,8 +526,12 @@ export class InMemoryCoachingRepository implements CoachingRepository {
           input.importMetadata?.duplicateKey,
       )
 
-      if (!duplicate) imported.push(this.createPerformanceResult(input))
+      if (!duplicate) {
+        imported.push(this.createPerformanceResultWithoutPersisting(input))
+      }
     }
+
+    if (imported.length > 0) this.persist()
 
     return imported
   }
@@ -610,6 +635,10 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     }
   }
 
+  private persist() {
+    this.dependencies.onChange?.(this.data)
+  }
+
   private requireAthlete(athleteId: string, recordId: string) {
     if (!this.data.athletes.some((athlete) => athlete.id === athleteId)) {
       throw new Error(
@@ -699,7 +728,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 }
 
-export const coachingRepository = new InMemoryCoachingRepository({
+const seedCoachingData: InMemoryCoachingData = {
   athletes,
   observations,
   interpretations,
@@ -707,4 +736,39 @@ export const coachingRepository = new InMemoryCoachingRepository({
   decisions,
   performanceResults,
   benchmarkProfiles: qasPacingBenchmarkProfiles,
-})
+}
+
+function getBrowserStorage(): KeyValueStorage | undefined {
+  try {
+    return typeof window === 'undefined' ? undefined : window.localStorage
+  } catch (error) {
+    console.warn('Squad Boss could not access local coaching storage.', error)
+    return undefined
+  }
+}
+
+const browserStorage = getBrowserStorage()
+const hydratedData = loadPersistedCoachingData(browserStorage, seedCoachingData)
+
+function createBrowserRepository() {
+  const dependencies: InMemoryCoachingDependencies = {
+    createId: () => crypto.randomUUID(),
+    now: () => new Date().toISOString(),
+    onChange: (data) => savePersistedCoachingData(browserStorage, data),
+  }
+
+  try {
+    return new InMemoryCoachingRepository(hydratedData, dependencies)
+  } catch (error) {
+    console.warn(
+      'Squad Boss ignored invalid local coaching data and loaded defaults.',
+      error,
+    )
+    return new InMemoryCoachingRepository(
+      loadPersistedCoachingData(undefined, seedCoachingData),
+      dependencies,
+    )
+  }
+}
+
+export const coachingRepository = createBrowserRepository()
