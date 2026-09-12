@@ -815,6 +815,197 @@ progress::-moz-progress-bar {
   background: #edf6fc;
 }
 
+.progression-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progression-heading h3 {
+  margin: 0;
+}
+
+.progression-direction {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #516176;
+  background: #e7edf3;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.progression-direction.positive {
+  color: #25643b;
+  background: #e9f6ed;
+}
+
+.progression-direction.negative {
+  color: #8a3030;
+  background: #fdeaea;
+}
+
+.progression-direction.flat,
+.progression-direction.mixed {
+  color: #765719;
+  background: #fff4d6;
+}
+
+.progression-chart-wrap {
+  margin: 14px 0;
+  padding: 10px 12px 4px;
+  border: 1px solid #dfe6ee;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.progression-chart {
+  display: block;
+  width: 100%;
+  max-height: 210px;
+}
+
+.progression-axis {
+  stroke: #aab7c5;
+  stroke-width: 1;
+}
+
+.progression-line {
+  fill: none;
+  stroke: #1769aa;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.progression-point {
+  fill: white;
+  stroke: #1769aa;
+  stroke-width: 3;
+  cursor: pointer;
+}
+
+.progression-point.pb {
+  fill: #d9a521;
+  stroke: #765719;
+}
+
+.progression-point.selected {
+  stroke: #12243a;
+  stroke-width: 4;
+}
+
+.progression-point:focus {
+  outline: none;
+  stroke: #c64848;
+}
+
+.progression-benchmark {
+  stroke: #7a899b;
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
+.progression-benchmark-label,
+.progression-date-label,
+.progression-point-label {
+  fill: #516176;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.progression-point-label {
+  fill: #765719;
+}
+
+.progression-chart-note {
+  margin: 0 !important;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.progression-table tr.selected {
+  background: #edf6fc;
+}
+
+.progression-table button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  color: #24364b;
+  background: #e7edf3;
+  font-weight: 800;
+}
+
+.progression-table button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.progression-findings {
+  margin-bottom: 0;
+}
+
+.results-import > summary {
+  color: #24364b;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.results-import-content {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.results-import-content > label {
+  display: grid;
+  gap: 6px;
+  color: #24364b;
+  font-weight: 700;
+}
+
+.results-import-content input[type="file"] {
+  padding: 10px 12px;
+  border: 1px solid #cbd6e2;
+  border-radius: 8px;
+  background: white;
+}
+
+.results-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #516176;
+}
+
+.results-import-content button {
+  justify-self: start;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  background: #1769aa;
+  font-weight: 800;
+}
+
+.results-import-content button.secondary-button {
+  color: #24364b;
+  background: #e7edf3;
+}
+
+.results-import-content button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.results-import-table input {
+  width: auto;
+}
+
 .split-entry {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

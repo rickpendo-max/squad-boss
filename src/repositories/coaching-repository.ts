@@ -3,6 +3,7 @@ import type {
   PerformanceComparison,
   PerformanceCourse,
   PerformanceResult,
+  PerformanceImportMetadata,
   PerformanceResultType,
   PerformanceSegment,
   SwimmingStroke,
@@ -90,6 +91,7 @@ export interface CreatePerformanceResultInput {
   totalSeconds: number
   segments: PerformanceSegment[]
   createdBy: string
+  importMetadata?: PerformanceImportMetadata
 }
 
 export interface CoachingRepository {
@@ -115,5 +117,8 @@ export interface CoachingRepository {
     resultId: string,
     input: CreatePerformanceResultInput,
   ): PerformanceResult
+  importPerformanceResults(
+    inputs: CreatePerformanceResultInput[],
+  ): PerformanceResult[]
   getPerformanceComparison(resultId: string): PerformanceComparison
 }

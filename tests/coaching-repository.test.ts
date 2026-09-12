@@ -836,14 +836,29 @@ test('rejects a non-positive Performance Result total', () => {
   }
 })
 
-test('rejects missing or invalid Performance Result splits', () => {
+test('accepts imported final-only results and rejects invalid supplied splits', () => {
+  const finalOnly = createPerformanceRepository().createPerformanceResult({
+    ...validPerformanceInput,
+    segments: [],
+    importMetadata: {
+      provider: 'Swimming Australia CSV',
+      sourceType: 'csv',
+      sourceFileName: 'results.csv',
+      meetName: 'Test Meet',
+      duplicateKey: 'final-only-test',
+      importedAt: '2026-07-25T00:00:00Z',
+    },
+  })
+
+  assert.equal(finalOnly.totalSeconds, validPerformanceInput.totalSeconds)
+  assert.deepEqual(finalOnly.segments, [])
   assert.throws(
     () =>
       createPerformanceRepository().createPerformanceResult({
         ...validPerformanceInput,
         segments: [],
       }),
-    /at least one segment/,
+    /requires at least one segment/,
   )
   assert.throws(
     () =>
@@ -931,6 +946,162 @@ test('matches only a compatible previous Performance Result', () => {
   assert.equal(comparison.previousResultId, previous.id)
   assert.equal(comparison.previousTotalDifferenceSeconds, -1)
   assert.equal(comparison.segmentComparisons[0].previousDifferenceSeconds, -0.5)
+})
+
+test('compares final-only results by total without segment findings', () => {
+  const previous = {
+    ...performanceResult,
+    id: 'final-only-previous',
+    occurredAt: '2026-07-19T00:00:00Z',
+    totalSeconds: 57,
+    segments: [],
+    source: 'import' as const,
+    importMetadata: {
+      provider: 'Swimming Australia CSV' as const,
+      sourceType: 'csv' as const,
+      sourceFileName: 'results.csv',
+      meetName: 'Test Meet',
+      duplicateKey: 'final-only-previous',
+      importedAt: '2026-07-20T00:00:00Z',
+    },
+  }
+  const current = {
+    ...performanceResult,
+    id: 'final-only-current',
+    totalSeconds: 54,
+    segments: [],
+    source: 'import' as const,
+    importMetadata: {
+      ...previous.importMetadata,
+      duplicateKey: 'final-only-current',
+    },
+  }
+  const repository = createPerformanceRepository([previous, current])
+  const comparison = repository.getPerformanceComparison(current.id)
+
+  assert.equal(comparison.previousResultId, previous.id)
+  assert.equal(comparison.previousTotalDifferenceSeconds, -3)
+  assert.equal(comparison.pbResultId, current.id)
+  assert.equal(comparison.pbTotalDifferenceSeconds, 0)
+  assert.deepEqual(comparison.segmentComparisons, [])
+  assert.equal(
+    comparison.findings.some((finding) => finding.findingType === 'segment'),
+    false,
+  )
+})
+
+test('compares a final-only result with an applicable total benchmark', () => {
+  const finalOnly = {
+    ...performanceResult,
+    id: 'benchmark-final-only',
+    totalSeconds: 56,
+    segments: [],
+    source: 'import' as const,
+    importMetadata: {
+      provider: 'Swimming Australia CSV' as const,
+      sourceType: 'csv' as const,
+      sourceFileName: 'results.csv',
+      meetName: 'Test Meet',
+      duplicateKey: 'benchmark-final-only',
+      importedAt: '2026-07-20T00:00:00Z',
+    },
+  }
+  const benchmark: BenchmarkProfile = {
+    id: 'benchmark-100-free',
+    benchmarkSetId: 'qas-test',
+    event: '100 m freestyle',
+    distance: 100,
+    stroke: 'freestyle',
+    course: 'LCM',
+    basis: 'Test fixture',
+    segments: [
+      {
+        segmentIndex: 1,
+        distanceFrom: 0,
+        distanceTo: 50,
+        expectedSeconds: 26.5,
+        metricCode: 'split-1',
+        unit: 'seconds',
+      },
+      {
+        segmentIndex: 2,
+        distanceFrom: 50,
+        distanceTo: 100,
+        expectedSeconds: 28.5,
+        metricCode: 'split-2',
+        unit: 'seconds',
+      },
+    ],
+  }
+  const comparison = createPerformanceRepository(
+    [finalOnly],
+    [benchmark],
+  ).getPerformanceComparison(finalOnly.id)
+
+  assert.equal(comparison.benchmarkMatchStatus, 'partial')
+  assert.equal(comparison.benchmarkProfileId, benchmark.id)
+  assert.equal(comparison.benchmarkTotalDifferenceSeconds, 1)
+  assert.deepEqual(comparison.segmentComparisons, [])
+})
+
+test('imports final-only results idempotently beside manual results', () => {
+  const repository = createPerformanceRepository([performanceResult])
+  const importedAt = '2026-07-25T00:00:00Z'
+  const input = {
+    ...validPerformanceInput,
+    occurredAt: '2026-07-24T00:00:00Z',
+    totalSeconds: 55.5,
+    segments: [],
+    importMetadata: {
+      provider: 'Swimming Australia CSV' as const,
+      sourceType: 'csv' as const,
+      sourceFileName: 'results.csv',
+      meetName: 'Queensland Championships',
+      duplicateKey:
+        'swimming-australia|sam-gould|2026-07-24|queensland championships|100|freestyle|LCM|55.50|',
+      importedAt,
+    },
+  }
+
+  assert.equal(repository.importPerformanceResults([input]).length, 1)
+  assert.equal(repository.importPerformanceResults([input]).length, 0)
+  const results = repository.getPerformanceResultsByAthleteId(sam.id)
+
+  assert.equal(results.length, 2)
+  assert.equal(results.find((result) => result.source === 'manual')?.id, performanceResult.id)
+  assert.equal(results.find((result) => result.source === 'import')?.segments.length, 0)
+})
+
+test('reports created results accurately when an import batch contains distinct and identical races', () => {
+  const repository = createPerformanceRepository()
+  const first = {
+    ...validPerformanceInput,
+    occurredAt: '2026-08-08T00:00:00Z',
+    totalSeconds: 59.02,
+    segments: [],
+    importMetadata: {
+      provider: 'Swimming Australia CSV' as const,
+      sourceType: 'csv' as const,
+      sourceFileName: 'GetParticipantResults.csv',
+      meetName: 'Championships',
+      duplicateKey:
+        'swimming-australia|sam-gould|2026-08-08|championships|100|freestyle|SCM|59.02|',
+      importedAt: '2026-08-09T00:00:00Z',
+    },
+  }
+  const second = {
+    ...first,
+    totalSeconds: 58.71,
+    importMetadata: {
+      ...first.importMetadata,
+      duplicateKey:
+        'swimming-australia|sam-gould|2026-08-08|championships|100|freestyle|SCM|58.71|',
+    },
+  }
+
+  assert.equal(repository.importPerformanceResults([first, second, first]).length, 2)
+  assert.equal(repository.importPerformanceResults([first, second]).length, 0)
+  assert.equal(repository.getPerformanceResultsByAthleteId(sam.id).length, 2)
 })
 
 test('changing stroke recalculates the previous comparable result', () => {

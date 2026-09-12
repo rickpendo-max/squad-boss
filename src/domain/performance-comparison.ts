@@ -33,8 +33,7 @@ function isComparable(left: PerformanceResult, right: PerformanceResult) {
     left.distance === right.distance &&
     left.stroke === right.stroke &&
     left.course === right.course &&
-    right.qualityStatus === 'valid' &&
-    sameSegmentBoundaries(left.segments, right.segments)
+    right.qualityStatus === 'valid'
   )
 }
 
@@ -103,6 +102,10 @@ export function calculatePerformanceComparison(
         right.occurredAt.localeCompare(left.occurredAt) ||
         right.createdAt.localeCompare(left.createdAt),
     )[0]
+  const previousSegmentsCompatible =
+    previous !== undefined &&
+    result.segments.length > 0 &&
+    sameSegmentBoundaries(result.segments, previous.segments)
 
   const storedPb = allResults
     .filter((candidate) => isComparable(result, candidate))
@@ -128,6 +131,7 @@ export function calculatePerformanceComparison(
   const benchmark = eligibleBenchmarkProfiles[0]
   const benchmarkSegmentsCompatible =
     benchmark !== undefined &&
+    result.segments.length > 0 &&
     benchmark.segments.length === result.segments.length &&
     benchmark.segments.every(
       (segment, index) =>
@@ -147,7 +151,9 @@ export function calculatePerformanceComparison(
   let previousCumulativeActual = 0
   let previousCumulativeReference = 0
   const segmentComparisons = result.segments.map((segment, index) => {
-    const previousSegment = previous?.segments[index]
+    const previousSegment = previousSegmentsCompatible
+      ? previous.segments[index]
+      : undefined
     const benchmarkSegment = benchmarkSegmentsCompatible
       ? benchmark.segments[index]
       : undefined
@@ -226,7 +232,7 @@ export function calculatePerformanceComparison(
   const pbTotalDifferenceSeconds =
     pbSeconds !== undefined ? round(result.totalSeconds - pbSeconds) : undefined
   const benchmarkExpectedTotal =
-    benchmarkSegmentsCompatible &&
+    benchmark !== undefined &&
     benchmark.segments.every(
       (segment) => segment.expectedSeconds !== undefined,
     )
@@ -324,9 +330,7 @@ export function calculatePerformanceComparison(
     resultId: result.id,
     previousResultId: previous?.id,
     pbResultId: useLegacyPb ? undefined : storedPb?.id,
-    benchmarkProfileId: benchmarkSegmentsCompatible
-      ? benchmark.id
-      : undefined,
+    benchmarkProfileId: benchmark?.id,
     previousTotalDifferenceSeconds,
     pbTotalDifferenceSeconds,
     benchmarkTotalDifferenceSeconds,

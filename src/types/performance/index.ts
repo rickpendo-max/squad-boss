@@ -2,6 +2,10 @@ export type PerformanceResultType = 'competition' | 'test' | 'training'
 export type PerformanceCourse = 'LCM' | 'SCM'
 export type PerformanceSource = 'manual' | 'import'
 export type PerformanceQualityStatus = 'valid' | 'estimated' | 'excluded'
+export type PerformanceVerificationStatus =
+  | 'verified'
+  | 'unverified'
+  | 'not-applicable'
 export type SwimmingStroke =
   | 'freestyle'
   | 'backstroke'
@@ -31,6 +35,21 @@ export interface PerformanceResult {
   qualityStatus: PerformanceQualityStatus
   createdAt: string
   createdBy: string
+  importMetadata?: PerformanceImportMetadata
+}
+
+export interface PerformanceImportMetadata {
+  provider: 'Swimming Australia CSV'
+  sourceType: 'csv'
+  sourceFileName: string
+  meetName: string
+  externalResultId?: string
+  roundStatus?: string
+  verified?: boolean
+  verificationStatus?: PerformanceVerificationStatus
+  age?: number
+  duplicateKey: string
+  importedAt: string
 }
 
 export interface BenchmarkSet {

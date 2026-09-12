@@ -1,0 +1,5 @@
+Result ID,Time,Course,Distance,Stroke,Meet Name,Date,Verified,First Name,Last Name,Round
+race-100,55.42,LC,100,Free,"Queensland, State Championships",15/08/2026,TRUE,Sam,Gould,Final
+race-200,2:01.35,Short Course,200,Freestyle,Winter Championships,2026-07-12,Yes,Sam,Gould,Heat
+race-bad,not-a-time,LCM,100,Fly,Test Meet,16/08/2026,TRUE,Sam,Gould,Final
+race-other,58.20,LCM,100,Back,Test Meet,16/08/2026,TRUE,Alex,Smith,Final

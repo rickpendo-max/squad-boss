@@ -3,12 +3,17 @@ import type { FormEvent } from 'react'
 
 import Card from '../../components/Card'
 import { calculateSplitTotal } from '../../domain/performance-entry'
+import {
+  calculatePerformanceProgression,
+  type PerformanceProgression,
+} from '../../domain/performance-progression'
 import { coachingRepository } from '../../repositories/in-memory-coaching-repository'
 import type {
   PerformanceCourse,
   PerformanceResultType,
   SwimmingStroke,
 } from '../../types/performance'
+import ResultsCsvImportPanel from './ResultsCsvImportPanel'
 
 const CURRENT_COACH_ID = 'local-coach'
 
@@ -19,6 +24,7 @@ type PerformanceForm = {
   stroke: SwimmingStroke
   course: PerformanceCourse
   splitSeconds: string[]
+  finalTotalSeconds: string
 }
 
 function initialForm(): PerformanceForm {
@@ -29,6 +35,7 @@ function initialForm(): PerformanceForm {
     stroke: 'freestyle',
     course: 'LCM',
     splitSeconds: ['', ''],
+    finalTotalSeconds: '',
   }
 }
 
@@ -62,6 +69,120 @@ function toDateTimeLocal(value: string) {
   return localDate.toISOString().slice(0, 16)
 }
 
+function ProgressionChart({
+  progression,
+  onSelect,
+}: {
+  progression: PerformanceProgression
+  onSelect: (resultId: string) => void
+}) {
+  const width = 640
+  const height = 190
+  const horizontalPadding = 42
+  const verticalPadding = 28
+  const benchmarkSeconds = progression.points.find(
+    (point) => point.benchmarkSeconds !== undefined,
+  )?.benchmarkSeconds
+  const plottedTimes = progression.points.map((point) => point.totalSeconds)
+  if (benchmarkSeconds !== undefined) plottedTimes.push(benchmarkSeconds)
+  const minimum = Math.min(...plottedTimes)
+  const maximum = Math.max(...plottedTimes)
+  const range = maximum - minimum || 1
+  const x = (index: number) =>
+    progression.points.length === 1
+      ? width / 2
+      : horizontalPadding +
+        (index / (progression.points.length - 1)) *
+          (width - horizontalPadding * 2)
+  const y = (seconds: number) =>
+    verticalPadding +
+    ((seconds - minimum) / range) * (height - verticalPadding * 2)
+  const coordinates = progression.points
+    .map((point, index) => `${x(index)},${y(point.totalSeconds)}`)
+    .join(' ')
+
+  return (
+    <div className="progression-chart-wrap">
+      <svg
+        aria-label="Total time progression; lower points indicate faster performances"
+        className="progression-chart"
+        role="img"
+        viewBox={`0 0 ${width} ${height}`}
+      >
+        <line
+          className="progression-axis"
+          x1={horizontalPadding}
+          x2={width - horizontalPadding}
+          y1={height - verticalPadding}
+          y2={height - verticalPadding}
+        />
+        {benchmarkSeconds !== undefined && (
+          <>
+            <line
+              className="progression-benchmark"
+              x1={horizontalPadding}
+              x2={width - horizontalPadding}
+              y1={y(benchmarkSeconds)}
+              y2={y(benchmarkSeconds)}
+            />
+            <text
+              className="progression-benchmark-label"
+              x={width - horizontalPadding}
+              y={y(benchmarkSeconds) - 6}
+              textAnchor="end"
+            >
+              Benchmark {formatSeconds(benchmarkSeconds)}
+            </text>
+          </>
+        )}
+        <polyline className="progression-line" points={coordinates} />
+        {progression.points.map((point, index) => (
+          <g key={point.resultId}>
+            <circle
+              aria-label={`${new Date(point.occurredAt).toLocaleDateString()}, ${formatSeconds(point.totalSeconds)}${point.isPb ? ', PB' : ''}${point.isSelected ? ', selected' : ''}`}
+              className={`progression-point${point.isPb ? ' pb' : ''}${point.isSelected ? ' selected' : ''}`}
+              cx={x(index)}
+              cy={y(point.totalSeconds)}
+              onClick={() => onSelect(point.resultId)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onSelect(point.resultId)
+                }
+              }}
+              r={point.isSelected ? 7 : 5}
+              role="button"
+              tabIndex={0}
+            />
+            {point.isPb && (
+              <text
+                className="progression-point-label"
+                x={x(index)}
+                y={y(point.totalSeconds) - 10}
+                textAnchor="middle"
+              >
+                PB
+              </text>
+            )}
+            <text
+              className="progression-date-label"
+              x={x(index)}
+              y={height - 8}
+              textAnchor="middle"
+            >
+              {new Date(point.occurredAt).toLocaleDateString(undefined, {
+                day: 'numeric',
+                month: 'short',
+              })}
+            </text>
+          </g>
+        ))}
+      </svg>
+      <p className="progression-chart-note">Lower total time is better.</p>
+    </div>
+  )
+}
+
 function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   const [results, setResults] = useState(() =>
     coachingRepository.getPerformanceResultsByAthleteId(athleteId),
@@ -71,21 +192,39 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   const [editingResultId, setEditingResultId] = useState<string>()
   const [selectedResultId, setSelectedResultId] = useState<string>()
   const editSectionRef = useRef<HTMLElement>(null)
-  const calculatedTotal = calculateSplitTotal(form.splitSeconds)
+  const enteredFinalTotal = Number(form.finalTotalSeconds)
+  const calculatedTotal = form.splitSeconds.length
+    ? calculateSplitTotal(form.splitSeconds)
+    : form.finalTotalSeconds.trim() &&
+        Number.isFinite(enteredFinalTotal) &&
+        enteredFinalTotal > 0
+      ? Math.round(enteredFinalTotal * 100) / 100
+      : undefined
   const selectedResult =
     results.find((result) => result.id === selectedResultId) ?? results[0]
   const comparison = selectedResult
     ? coachingRepository.getPerformanceComparison(selectedResult.id)
+    : undefined
+  const progression = selectedResult
+    ? calculatePerformanceProgression(
+        selectedResult,
+        results,
+        new Map(
+          results.map((result) => [
+            result.id,
+            coachingRepository.getPerformanceComparison(result.id),
+          ]),
+        ),
+      )
     : undefined
 
   function handleDistanceChange(distance: 100 | 200) {
     setForm({
       ...form,
       distance,
-      splitSeconds: Array.from(
-        { length: distance / 50 },
-        () => '',
-      ),
+      splitSeconds: form.splitSeconds.length
+        ? Array.from({ length: distance / 50 }, () => '')
+        : [],
     })
   }
 
@@ -110,6 +249,9 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
       splitSeconds: selectedResult.segments.map((segment) =>
         String(segment.seconds),
       ),
+      finalTotalSeconds: selectedResult.segments.length
+        ? ''
+        : String(selectedResult.totalSeconds),
     })
     setEditingResultId(selectedResult.id)
     setError('')
@@ -250,6 +392,18 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         </details>
       </section>
 
+      <section className="performance-section">
+        <ResultsCsvImportPanel
+          athleteId={athleteId}
+          onImported={() => {
+            setResults(
+              coachingRepository.getPerformanceResultsByAthleteId(athleteId),
+            )
+            setSelectedResultId(undefined)
+          }}
+        />
+      </section>
+
       <section
         className={`performance-section${editingResultId ? ' performance-editing' : ''}`}
         ref={editSectionRef}
@@ -340,6 +494,8 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
             </select>
           </label>
 
+          {form.splitSeconds.length ? (
+            <>
           <fieldset className="split-entry">
             <legend>50 m splits</legend>
             {form.splitSeconds.map((split, index) => (
@@ -365,6 +521,27 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
                 : formatSeconds(calculatedTotal)}
             </strong>
           </output>
+            </>
+          ) : (
+            <>
+              <p className="form-notice">
+                Split data is unavailable for this imported result.
+              </p>
+              <label>
+                Final time (seconds)
+                <input
+                  required
+                  min="0.01"
+                  step="0.01"
+                  type="number"
+                  value={form.finalTotalSeconds}
+                  onChange={(event) =>
+                    setForm({ ...form, finalTotalSeconds: event.target.value })
+                  }
+                />
+              </label>
+            </>
+          )}
 
           {error && <p className="form-error">{error}</p>}
           <div className="form-actions">
@@ -382,6 +559,72 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
             )}
           </div>
         </form>
+      </section>
+
+      <section className="performance-section">
+        <div className="progression-heading">
+          <h3>Performance Progression</h3>
+          {progression && (
+            <span className={`progression-direction ${progression.direction}`}>
+              {progression.direction}
+            </span>
+          )}
+        </div>
+        {progression?.points.length ? (
+          <>
+            <ProgressionChart
+              progression={progression}
+              onSelect={selectResult}
+            />
+            <div className="comparison-table-wrap">
+              <table className="comparison-table progression-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>From previous</th>
+                    <th>From PB</th>
+                    <th>From benchmark</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {progression.points.map((point) => (
+                    <tr
+                      className={point.isSelected ? 'selected' : undefined}
+                      key={point.resultId}
+                    >
+                      <td>{new Date(point.occurredAt).toLocaleDateString()}</td>
+                      <td>{formatSeconds(point.totalSeconds)}</td>
+                      <td>{formatDifference(point.previousDifferenceSeconds)}</td>
+                      <td>{formatDifference(point.pbDifferenceSeconds)}</td>
+                      <td>
+                        {formatDifference(point.benchmarkDifferenceSeconds)}
+                      </td>
+                      <td>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          disabled={point.isSelected}
+                          onClick={() => selectResult(point.resultId)}
+                        >
+                          {point.isSelected ? 'Selected' : 'Open'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="performance-findings progression-findings">
+              {progression.findings.map((finding) => (
+                <li key={finding}>{finding}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>Select a performance result to view progression.</p>
+        )}
       </section>
 
       <section className="performance-section">
@@ -407,6 +650,10 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
               <dd>{comparison.benchmarkMatchStatus}</dd>
             </div>
             <div>
+              <dt>From QAS benchmark</dt>
+              <dd>{formatDifference(comparison.benchmarkTotalDifferenceSeconds)}</dd>
+            </div>
+            <div>
               <dt>Largest segment deviation</dt>
               <dd>
                 {comparison.largestPositiveSegmentDeviation
@@ -425,7 +672,7 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
 
       <section className="performance-section">
         <h3>Segment Comparison</h3>
-        {comparison ? (
+        {comparison && selectedResult?.segments.length ? (
           <div className="comparison-table-wrap">
             <table className="comparison-table">
               <thead>
@@ -456,13 +703,17 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
               </tbody>
             </table>
           </div>
+        ) : selectedResult ? (
+          <p>Split data unavailable for this result.</p>
         ) : (
           <p>No segment comparison available.</p>
         )}
         {comparison && !comparison.previousResultId && (
           <p>No previous comparable result.</p>
         )}
-        {comparison && comparison.pbResultId === undefined && (
+        {comparison &&
+          selectedResult?.segments.length > 0 &&
+          comparison.pbResultId === undefined && (
           <p>PB split profile unavailable; PB comparison is total-time only when recorded.</p>
         )}
       </section>

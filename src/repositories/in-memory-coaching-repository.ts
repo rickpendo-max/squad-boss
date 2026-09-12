@@ -160,9 +160,9 @@ function validatePerformanceResult(result: PerformanceResult) {
     throw new Error(`Performance Result ${result.id} total must be positive`)
   }
 
-  if (result.segments.length === 0) {
+  if (result.source === 'manual' && result.segments.length === 0) {
     throw new Error(
-      `Performance Result ${result.id} requires at least one segment`,
+      `Manual Performance Result ${result.id} requires at least one segment`,
     )
   }
 
@@ -189,7 +189,7 @@ function validatePerformanceResult(result: PerformanceResult) {
     expectedDistanceFrom = segment.distanceTo
   }
 
-  if (expectedDistanceFrom !== result.distance) {
+  if (result.segments.length > 0 && expectedDistanceFrom !== result.distance) {
     throw new Error(
       `Performance Result ${result.id} segments must cover the event distance`,
     )
@@ -201,6 +201,7 @@ function validatePerformanceResult(result: PerformanceResult) {
   )
 
   if (
+    result.segments.length > 0 &&
     Math.abs(segmentTotal - result.totalSeconds) >
     RESULT_TOTAL_TOLERANCE_SECONDS
   ) {
@@ -214,6 +215,9 @@ function copyPerformanceResult(result: PerformanceResult): PerformanceResult {
   return {
     ...result,
     segments: result.segments.map((segment) => ({ ...segment })),
+    importMetadata: result.importMetadata
+      ? { ...result.importMetadata }
+      : undefined,
   }
 }
 
@@ -440,7 +444,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
       ...input,
       segments: input.segments.map((segment) => ({ ...segment })),
       id: this.dependencies.createId(),
-      source: 'manual',
+      source: input.importMetadata ? 'import' : 'manual',
       qualityStatus: 'valid',
       createdAt: this.dependencies.now(),
     }
@@ -485,6 +489,26 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     performanceResults[index] = result
 
     return copyPerformanceResult(result)
+  }
+
+  importPerformanceResults(inputs: CreatePerformanceResultInput[]) {
+    const imported: PerformanceResult[] = []
+
+    for (const input of inputs) {
+      if (!input.importMetadata) {
+        throw new Error('Imported Performance Results require import metadata')
+      }
+
+      const duplicate = (this.data.performanceResults ?? []).some(
+        (result) =>
+          result.importMetadata?.duplicateKey ===
+          input.importMetadata?.duplicateKey,
+      )
+
+      if (!duplicate) imported.push(this.createPerformanceResult(input))
+    }
+
+    return imported
   }
 
   getPerformanceComparison(resultId: string) {
