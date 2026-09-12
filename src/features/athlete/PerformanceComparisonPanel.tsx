@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import Card from '../../components/Card'
@@ -69,10 +69,13 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   const [form, setForm] = useState(initialForm)
   const [error, setError] = useState('')
   const [editingResultId, setEditingResultId] = useState<string>()
+  const [selectedResultId, setSelectedResultId] = useState<string>()
+  const editSectionRef = useRef<HTMLElement>(null)
   const calculatedTotal = calculateSplitTotal(form.splitSeconds)
-  const latestResult = results[0]
-  const comparison = latestResult
-    ? coachingRepository.getPerformanceComparison(latestResult.id)
+  const selectedResult =
+    results.find((result) => result.id === selectedResultId) ?? results[0]
+  const comparison = selectedResult
+    ? coachingRepository.getPerformanceComparison(selectedResult.id)
     : undefined
 
   function handleDistanceChange(distance: 100 | 200) {
@@ -96,19 +99,33 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   }
 
   function startEditing() {
-    if (!latestResult) return
+    if (!selectedResult) return
 
     setForm({
-      resultType: latestResult.resultType,
-      occurredAt: toDateTimeLocal(latestResult.occurredAt),
-      distance: latestResult.distance as 100 | 200,
-      stroke: latestResult.stroke,
-      course: latestResult.course,
-      splitSeconds: latestResult.segments.map((segment) =>
+      resultType: selectedResult.resultType,
+      occurredAt: toDateTimeLocal(selectedResult.occurredAt),
+      distance: selectedResult.distance as 100 | 200,
+      stroke: selectedResult.stroke,
+      course: selectedResult.course,
+      splitSeconds: selectedResult.segments.map((segment) =>
         String(segment.seconds),
       ),
     })
-    setEditingResultId(latestResult.id)
+    setEditingResultId(selectedResult.id)
+    setError('')
+    requestAnimationFrame(() => {
+      editSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+      editSectionRef.current?.focus({ preventScroll: true })
+    })
+  }
+
+  function selectResult(resultId: string) {
+    setSelectedResultId(resultId)
+    setForm(initialForm())
+    setEditingResultId(undefined)
     setError('')
   }
 
@@ -152,8 +169,10 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
 
       if (editingResultId) {
         coachingRepository.updatePerformanceResult(editingResultId, input)
+        setSelectedResultId(editingResultId)
       } else {
         coachingRepository.createPerformanceResult(input)
+        setSelectedResultId(undefined)
       }
 
       setResults(
@@ -174,15 +193,13 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   return (
     <Card eyebrow="Primary coach workflow" title="Performance Comparison">
       <section className="performance-section">
-        <h3>Latest Performance</h3>
-        {latestResult ? (
+        <h3>{selectedResultId ? 'Selected Performance' : 'Latest Performance'}</h3>
+        {selectedResult ? (
           <div className="performance-latest">
-            <strong>
-              {latestResult.distance} m {latestResult.stroke}
-            </strong>
-            <span>{latestResult.course}</span>
-            <span>{displayDate(latestResult.occurredAt)}</span>
-            <strong>{formatSeconds(latestResult.totalSeconds)}</strong>
+            <strong>{selectedResult.event}</strong>
+            <span>{selectedResult.course}</span>
+            <span>{displayDate(selectedResult.occurredAt)}</span>
+            <strong>{formatSeconds(selectedResult.totalSeconds)}</strong>
             <button
               className="secondary-button performance-edit-button"
               type="button"
@@ -197,7 +214,54 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
       </section>
 
       <section className="performance-section">
+        <details className="performance-history">
+          <summary>Performance History ({results.length})</summary>
+          {results.length ? (
+            <div className="performance-history-list">
+              {results.map((result) => {
+                const isSelected = result.id === selectedResult?.id
+
+                return (
+                  <div
+                    className={`performance-history-row${isSelected ? ' selected' : ''}`}
+                    key={result.id}
+                  >
+                    <time dateTime={result.occurredAt}>
+                      {new Date(result.occurredAt).toLocaleDateString()}
+                    </time>
+                    <strong>{result.event}</strong>
+                    <span>{result.course}</span>
+                    <span>{formatSeconds(result.totalSeconds)}</span>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={isSelected}
+                      onClick={() => selectResult(result.id)}
+                    >
+                      {isSelected ? 'Selected' : 'Open'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p>No performance results recorded.</p>
+          )}
+        </details>
+      </section>
+
+      <section
+        className={`performance-section${editingResultId ? ' performance-editing' : ''}`}
+        ref={editSectionRef}
+        tabIndex={-1}
+      >
         <h3>{editingResultId ? 'Edit Performance' : 'Add Performance'}</h3>
+        {editingResultId && selectedResult && (
+          <p className="form-notice" role="status">
+            Editing {selectedResult.event} from{' '}
+            {new Date(selectedResult.occurredAt).toLocaleDateString()}
+          </p>
+        )}
         <form className="observation-form" onSubmit={handleSubmit}>
           <label>
             Result type
@@ -322,11 +386,11 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
 
       <section className="performance-section">
         <h3>Comparison Summary</h3>
-        {latestResult && comparison ? (
+        {selectedResult && comparison ? (
           <dl className="comparison-summary">
             <div>
               <dt>Result total</dt>
-              <dd>{formatSeconds(latestResult.totalSeconds)}</dd>
+              <dd>{formatSeconds(selectedResult.totalSeconds)}</dd>
             </div>
             <div>
               <dt>From previous</dt>
