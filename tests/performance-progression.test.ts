@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { athletes } from '../src/data/athletes.ts'
+import { calculatePerformanceComparison } from '../src/domain/performance-comparison.ts'
 import { calculatePerformanceProgression } from '../src/domain/performance-progression.ts'
 import type {
+  BenchmarkProfile,
   PerformanceComparison,
   PerformanceResult,
 } from '../src/types/performance/index.ts'
@@ -217,4 +220,94 @@ test('distinguishes flat and deteriorating recent sequences', () => {
   assert.match(flat.findings[0], /No meaningful improvement/)
   assert.equal(deteriorating.direction, 'negative')
   assert.match(deteriorating.findings[0], /Slower across/)
+})
+
+test('isolates PB, previous, progression and benchmarks by course', () => {
+  const lcmOlder = result('lcm-older', '2026-01-01T00:00:00Z', 59)
+  const scmOlder = result('scm-older', '2026-02-01T00:00:00Z', 57, {
+    course: 'SCM',
+  })
+  const lcmLatest = result('lcm-latest', '2026-03-01T00:00:00Z', 58.5)
+  const scmLatest = result('scm-latest', '2026-04-01T00:00:00Z', 56.5, {
+    course: 'SCM',
+  })
+  const results = [lcmOlder, scmOlder, lcmLatest, scmLatest]
+  const benchmarks: BenchmarkProfile[] = [
+    {
+      id: 'lcm-benchmark',
+      benchmarkSetId: 'test-benchmarks',
+      event: '100 m freestyle',
+      distance: 100,
+      stroke: 'freestyle',
+      course: 'LCM',
+      basis: 'Course-isolation test',
+      segments: [
+        { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, expectedSeconds: 29, metricCode: 'lcm-1', unit: 'seconds' },
+        { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, expectedSeconds: 30, metricCode: 'lcm-2', unit: 'seconds' },
+      ],
+    },
+    {
+      id: 'scm-benchmark',
+      benchmarkSetId: 'test-benchmarks',
+      event: '100 m freestyle',
+      distance: 100,
+      stroke: 'freestyle',
+      course: 'SCM',
+      basis: 'Course-isolation test',
+      segments: [
+        { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, expectedSeconds: 28, metricCode: 'scm-1', unit: 'seconds' },
+        { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, expectedSeconds: 29, metricCode: 'scm-2', unit: 'seconds' },
+      ],
+    },
+  ]
+  const athlete = { ...athletes[0], personalBests: [] }
+  const comparisons = new Map(
+    results.map((item) => [
+      item.id,
+      calculatePerformanceComparison(item, results, athlete, benchmarks),
+    ]),
+  )
+  const lcmComparison = comparisons.get(lcmLatest.id)!
+  const scmComparison = comparisons.get(scmLatest.id)!
+  const lcmProgression = calculatePerformanceProgression(
+    lcmLatest,
+    results,
+    comparisons,
+  )
+  const scmProgression = calculatePerformanceProgression(
+    scmLatest,
+    results,
+    comparisons,
+  )
+
+  assert.equal(lcmComparison.pbResultId, lcmLatest.id)
+  assert.equal(lcmComparison.previousResultId, lcmOlder.id)
+  assert.equal(lcmComparison.previousTotalDifferenceSeconds, -0.5)
+  assert.equal(lcmComparison.pbTotalDifferenceSeconds, 0)
+  assert.equal(lcmComparison.benchmarkProfileId, 'lcm-benchmark')
+  assert.deepEqual(
+    lcmProgression.points.map((point) => [point.resultId, point.totalSeconds]),
+    [['lcm-older', 59], ['lcm-latest', 58.5]],
+  )
+  assert.equal(
+    lcmProgression.points.find((point) => point.isPb)?.totalSeconds,
+    58.5,
+  )
+
+  assert.equal(scmComparison.pbResultId, scmLatest.id)
+  assert.equal(scmComparison.previousResultId, scmOlder.id)
+  assert.equal(scmComparison.previousTotalDifferenceSeconds, -0.5)
+  assert.equal(scmComparison.pbTotalDifferenceSeconds, 0)
+  assert.equal(scmComparison.benchmarkProfileId, 'scm-benchmark')
+  assert.deepEqual(
+    scmProgression.points.map((point) => [point.resultId, point.totalSeconds]),
+    [['scm-older', 57], ['scm-latest', 56.5]],
+  )
+  assert.equal(
+    scmProgression.points.find((point) => point.isPb)?.totalSeconds,
+    56.5,
+  )
+
+  assert.equal(comparisons.get(lcmOlder.id)?.pbTotalDifferenceSeconds, 0.5)
+  assert.equal(comparisons.get(scmOlder.id)?.pbTotalDifferenceSeconds, 0.5)
 })

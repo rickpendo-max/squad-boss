@@ -563,7 +563,11 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
 
       <section className="performance-section">
         <div className="progression-heading">
-          <h3>Performance Progression</h3>
+          <h3>
+            Performance Progression
+            {selectedResult &&
+              ` — ${selectedResult.event} · ${selectedResult.course}`}
+          </h3>
           {progression && (
             <span className={`progression-direction ${progression.direction}`}>
               {progression.direction}
