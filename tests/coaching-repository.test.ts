@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { getInitialAthlete } from '../src/context/athlete-selection.ts'
 import { athletes } from '../src/data/athletes.ts'
+import { calculateSplitTotal } from '../src/domain/performance-entry.ts'
 import {
   InMemoryCoachingRepository,
   coachingRepository,
@@ -20,6 +21,22 @@ import type {
 } from '../src/types/performance/index.ts'
 
 const [sam, maddie] = athletes
+
+test('calculates a 100 m total from two decimal splits', () => {
+  assert.equal(calculateSplitTotal(['27.35', '28.66']), 56.01)
+})
+
+test('calculates a 200 m total from four decimal splits', () => {
+  assert.equal(
+    calculateSplitTotal(['29.11', '30.22', '31.33', '32.44']),
+    123.1,
+  )
+})
+
+test('does not calculate a total until every split is valid', () => {
+  assert.equal(calculateSplitTotal(['27.35', '']), undefined)
+  assert.equal(calculateSplitTotal(['27.35', '0']), undefined)
+})
 
 const observation: Observation = {
   id: 'observation-1',
@@ -704,6 +721,97 @@ test('creates a valid Athlete-owned Performance Result', () => {
   assert.deepEqual(repository.getPerformanceResultsByAthleteId(maddie.id), [])
 })
 
+test('stores the total derived from race-entry splits', () => {
+  const repository = createPerformanceRepository()
+  const splitEntries = ['27.35', '28.66']
+  const totalSeconds = calculateSplitTotal(splitEntries)
+
+  assert.notEqual(totalSeconds, undefined)
+  const created = repository.createPerformanceResult({
+    ...validPerformanceInput,
+    totalSeconds: totalSeconds!,
+    segments: validPerformanceInput.segments.map((segment, index) => ({
+      ...segment,
+      seconds: Number(splitEntries[index]),
+    })),
+  })
+
+  assert.equal(created.totalSeconds, 56.01)
+})
+
+test('updates a Performance Result and preserves identity and creation metadata', () => {
+  const repository = createPerformanceRepository([{ ...performanceResult }])
+  const splitEntries = ['27.25', '28.5']
+  const totalSeconds = calculateSplitTotal(splitEntries)
+
+  assert.notEqual(totalSeconds, undefined)
+  const updated = repository.updatePerformanceResult(performanceResult.id, {
+    ...validPerformanceInput,
+    totalSeconds: totalSeconds!,
+    segments: validPerformanceInput.segments.map((segment, index) => ({
+      ...segment,
+      seconds: Number(splitEntries[index]),
+    })),
+  })
+
+  assert.equal(updated.id, performanceResult.id)
+  assert.equal(updated.createdAt, performanceResult.createdAt)
+  assert.equal(updated.totalSeconds, 55.75)
+  assert.deepEqual(
+    repository.getPerformanceResultsByAthleteId(sam.id)[0].segments,
+    updated.segments,
+  )
+  updated.segments[0].seconds = 999
+  assert.equal(
+    repository.getPerformanceResultsByAthleteId(sam.id)[0].segments[0].seconds,
+    27.25,
+  )
+})
+
+test('rejects an update for an unknown Performance Result', () => {
+  assert.throws(
+    () =>
+      createPerformanceRepository().updatePerformanceResult(
+        'missing-performance',
+        validPerformanceInput,
+      ),
+    /was not found/,
+  )
+})
+
+test('rejects moving an edited Performance Result to another Athlete', () => {
+  const repository = createPerformanceRepository([{ ...performanceResult }])
+
+  assert.throws(
+    () =>
+      repository.updatePerformanceResult(performanceResult.id, {
+        ...validPerformanceInput,
+        athleteId: maddie.id,
+      }),
+    /another athlete/,
+  )
+})
+
+test('rejects invalid edited splits without changing the stored result', () => {
+  const repository = createPerformanceRepository([{ ...performanceResult }])
+
+  assert.throws(
+    () =>
+      repository.updatePerformanceResult(performanceResult.id, {
+        ...validPerformanceInput,
+        segments: [
+          { ...validPerformanceInput.segments[0], seconds: 0 },
+          validPerformanceInput.segments[1],
+        ],
+      }),
+    /segment times must be positive/,
+  )
+  assert.equal(
+    repository.getPerformanceResultsByAthleteId(sam.id)[0].totalSeconds,
+    performanceResult.totalSeconds,
+  )
+})
+
 test('rejects a Performance Result for an unknown Athlete', () => {
   assert.throws(
     () =>
@@ -825,6 +933,85 @@ test('matches only a compatible previous Performance Result', () => {
   assert.equal(comparison.segmentComparisons[0].previousDifferenceSeconds, -0.5)
 })
 
+test('changing stroke recalculates the previous comparable result', () => {
+  const backstrokePrevious = {
+    ...performanceResult,
+    id: 'backstroke-previous',
+    occurredAt: '2026-07-19T00:00:00Z',
+    stroke: 'backstroke' as const,
+  }
+  const repository = createPerformanceRepository([
+    backstrokePrevious,
+    performanceResult,
+  ])
+
+  repository.updatePerformanceResult(performanceResult.id, {
+    ...validPerformanceInput,
+    stroke: 'backstroke',
+    event: '100 m backstroke',
+  })
+
+  assert.equal(
+    repository.getPerformanceComparison(performanceResult.id).previousResultId,
+    backstrokePrevious.id,
+  )
+})
+
+test('changing course recalculates the previous comparable result', () => {
+  const scmPrevious = {
+    ...performanceResult,
+    id: 'scm-previous',
+    occurredAt: '2026-07-19T00:00:00Z',
+    course: 'SCM' as const,
+  }
+  const repository = createPerformanceRepository([scmPrevious, performanceResult])
+
+  repository.updatePerformanceResult(performanceResult.id, {
+    ...validPerformanceInput,
+    course: 'SCM',
+  })
+
+  assert.equal(
+    repository.getPerformanceComparison(performanceResult.id).previousResultId,
+    scmPrevious.id,
+  )
+})
+
+test('changing distance recalculates the previous comparable result', () => {
+  const segments = [27, 29, 30, 31].map((seconds, index) => ({
+    segmentIndex: index + 1,
+    distanceFrom: index * 50,
+    distanceTo: (index + 1) * 50,
+    seconds,
+  }))
+  const previous200 = {
+    ...performanceResult,
+    id: '200-previous',
+    occurredAt: '2026-07-19T00:00:00Z',
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 117,
+    segments,
+  }
+  const repository = createPerformanceRepository([previous200, performanceResult])
+
+  repository.updatePerformanceResult(performanceResult.id, {
+    ...validPerformanceInput,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 118,
+    segments: segments.map((segment, index) => ({
+      ...segment,
+      seconds: segment.seconds + (index === 3 ? 1 : 0),
+    })),
+  })
+
+  assert.equal(
+    repository.getPerformanceComparison(performanceResult.id).previousResultId,
+    previous200.id,
+  )
+})
+
 test('selects the fastest valid comparable stored result as PB', () => {
   const storedPb = {
     ...performanceResult,
@@ -855,6 +1042,45 @@ test('selects the fastest valid comparable stored result as PB', () => {
 
   assert.equal(comparison.pbResultId, storedPb.id)
   assert.equal(comparison.pbTotalDifferenceSeconds, 2)
+})
+
+test('recalculates PB and previous result after editing a result', () => {
+  const priorPb = {
+    ...performanceResult,
+    id: 'prior-pb',
+    occurredAt: '2026-07-18T00:00:00Z',
+    totalSeconds: 55,
+    segments: [
+      { ...performanceResult.segments[0], seconds: 26.5 },
+      { ...performanceResult.segments[1], seconds: 28.5 },
+    ],
+  }
+  const repository = createPerformanceRepository([priorPb, performanceResult])
+
+  repository.updatePerformanceResult(performanceResult.id, {
+    ...validPerformanceInput,
+    totalSeconds: 54,
+    segments: [
+      { ...validPerformanceInput.segments[0], seconds: 26 },
+      { ...validPerformanceInput.segments[1], seconds: 28 },
+    ],
+  })
+  let comparison = repository.getPerformanceComparison(performanceResult.id)
+
+  assert.equal(comparison.pbResultId, performanceResult.id)
+  assert.equal(comparison.pbTotalDifferenceSeconds, 0)
+  assert.equal(comparison.previousResultId, priorPb.id)
+  assert.equal(comparison.previousTotalDifferenceSeconds, -1)
+
+  repository.updatePerformanceResult(performanceResult.id, {
+    ...validPerformanceInput,
+    totalSeconds: 56,
+  })
+  comparison = repository.getPerformanceComparison(performanceResult.id)
+
+  assert.equal(comparison.pbResultId, priorPb.id)
+  assert.equal(comparison.pbTotalDifferenceSeconds, 1)
+  assert.equal(comparison.previousTotalDifferenceSeconds, 1)
 })
 
 test('uses positive differences for slower and negative for faster', () => {

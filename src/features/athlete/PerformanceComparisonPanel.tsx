@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 
 import Card from '../../components/Card'
+import { calculateSplitTotal } from '../../domain/performance-entry'
 import { coachingRepository } from '../../repositories/in-memory-coaching-repository'
 import type {
   PerformanceCourse,
@@ -17,7 +18,6 @@ type PerformanceForm = {
   distance: 100 | 200
   stroke: SwimmingStroke
   course: PerformanceCourse
-  totalSeconds: string
   splitSeconds: string[]
 }
 
@@ -28,7 +28,6 @@ function initialForm(): PerformanceForm {
     distance: 100,
     stroke: 'freestyle',
     course: 'LCM',
-    totalSeconds: '',
     splitSeconds: ['', ''],
   }
 }
@@ -57,12 +56,20 @@ function displayDate(value: string) {
   return new Date(value).toLocaleString()
 }
 
+function toDateTimeLocal(value: string) {
+  const date = new Date(value)
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
+}
+
 function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   const [results, setResults] = useState(() =>
     coachingRepository.getPerformanceResultsByAthleteId(athleteId),
   )
   const [form, setForm] = useState(initialForm)
   const [error, setError] = useState('')
+  const [editingResultId, setEditingResultId] = useState<string>()
+  const calculatedTotal = calculateSplitTotal(form.splitSeconds)
   const latestResult = results[0]
   const comparison = latestResult
     ? coachingRepository.getPerformanceComparison(latestResult.id)
@@ -88,23 +95,44 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
     })
   }
 
+  function startEditing() {
+    if (!latestResult) return
+
+    setForm({
+      resultType: latestResult.resultType,
+      occurredAt: toDateTimeLocal(latestResult.occurredAt),
+      distance: latestResult.distance as 100 | 200,
+      stroke: latestResult.stroke,
+      course: latestResult.course,
+      splitSeconds: latestResult.segments.map((segment) =>
+        String(segment.seconds),
+      ),
+    })
+    setEditingResultId(latestResult.id)
+    setError('')
+  }
+
+  function cancelEditing() {
+    setForm(initialForm())
+    setEditingResultId(undefined)
+    setError('')
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    const totalSeconds = Number(form.totalSeconds)
     const splitSeconds = form.splitSeconds.map(Number)
 
     if (
       !form.occurredAt ||
-      !form.totalSeconds ||
-      form.splitSeconds.some((split) => !split)
+      calculatedTotal === undefined
     ) {
-      setError('Date, total time and every 50 m split are required.')
+      setError('Date and a positive time for every 50 m split are required.')
       return
     }
 
     try {
-      coachingRepository.createPerformanceResult({
+      const input = {
         athleteId,
         resultType: form.resultType,
         occurredAt: new Date(form.occurredAt).toISOString(),
@@ -112,7 +140,7 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         distance: form.distance,
         stroke: form.stroke,
         course: form.course,
-        totalSeconds,
+        totalSeconds: calculatedTotal,
         segments: splitSeconds.map((seconds, index) => ({
           segmentIndex: index + 1,
           distanceFrom: index * 50,
@@ -120,12 +148,19 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
           seconds,
         })),
         createdBy: CURRENT_COACH_ID,
-      })
+      }
+
+      if (editingResultId) {
+        coachingRepository.updatePerformanceResult(editingResultId, input)
+      } else {
+        coachingRepository.createPerformanceResult(input)
+      }
 
       setResults(
         coachingRepository.getPerformanceResultsByAthleteId(athleteId),
       )
       setForm(initialForm())
+      setEditingResultId(undefined)
       setError('')
     } catch (caughtError) {
       setError(
@@ -148,6 +183,13 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
             <span>{latestResult.course}</span>
             <span>{displayDate(latestResult.occurredAt)}</span>
             <strong>{formatSeconds(latestResult.totalSeconds)}</strong>
+            <button
+              className="secondary-button performance-edit-button"
+              type="button"
+              onClick={startEditing}
+            >
+              Edit
+            </button>
           </div>
         ) : (
           <p>No performance results recorded.</p>
@@ -155,7 +197,7 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
       </section>
 
       <section className="performance-section">
-        <h3>Add Performance</h3>
+        <h3>{editingResultId ? 'Edit Performance' : 'Add Performance'}</h3>
         <form className="observation-form" onSubmit={handleSubmit}>
           <label>
             Result type
@@ -234,20 +276,6 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
             </select>
           </label>
 
-          <label>
-            Total time (seconds)
-            <input
-              required
-              min="0.01"
-              step="0.01"
-              type="number"
-              value={form.totalSeconds}
-              onChange={(event) =>
-                setForm({ ...form, totalSeconds: event.target.value })
-              }
-            />
-          </label>
-
           <fieldset className="split-entry">
             <legend>50 m splits</legend>
             {form.splitSeconds.map((split, index) => (
@@ -265,8 +293,30 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
             ))}
           </fieldset>
 
+          <output className="calculated-total" aria-live="polite">
+            <span>Calculated total</span>
+            <strong>
+              {calculatedTotal === undefined
+                ? 'Enter every split'
+                : formatSeconds(calculatedTotal)}
+            </strong>
+          </output>
+
           {error && <p className="form-error">{error}</p>}
-          <button type="submit">Save Performance</button>
+          <div className="form-actions">
+            <button type="submit">
+              {editingResultId ? 'Save Changes' : 'Save Performance'}
+            </button>
+            {editingResultId && (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={cancelEditing}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       </section>
 

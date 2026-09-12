@@ -111,5 +111,9 @@ export interface CoachingRepository {
   createPerformanceResult(
     input: CreatePerformanceResultInput,
   ): PerformanceResult
+  updatePerformanceResult(
+    resultId: string,
+    input: CreatePerformanceResultInput,
+  ): PerformanceResult
   getPerformanceComparison(resultId: string): PerformanceComparison
 }

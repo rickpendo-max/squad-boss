@@ -453,6 +453,40 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     return copyPerformanceResult(result)
   }
 
+  updatePerformanceResult(
+    resultId: string,
+    input: CreatePerformanceResultInput,
+  ) {
+    const performanceResults = this.data.performanceResults ?? []
+    const index = performanceResults.findIndex(
+      (result) => result.id === resultId,
+    )
+
+    if (index === -1) {
+      throw new Error(`Performance Result ${resultId} was not found`)
+    }
+
+    if (input.athleteId !== performanceResults[index].athleteId) {
+      throw new Error(
+        `Performance Result ${resultId} cannot be moved to another athlete`,
+      )
+    }
+
+    const result: PerformanceResult = {
+      ...performanceResults[index],
+      ...input,
+      id: resultId,
+      createdAt: performanceResults[index].createdAt,
+      segments: input.segments.map((segment) => ({ ...segment })),
+    }
+
+    validatePerformanceResult(result)
+    this.requireAthlete(result.athleteId, result.id)
+    performanceResults[index] = result
+
+    return copyPerformanceResult(result)
+  }
+
   getPerformanceComparison(resultId: string) {
     const result = (this.data.performanceResults ?? []).find(
       (candidate) => candidate.id === resultId,
