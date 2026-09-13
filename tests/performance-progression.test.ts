@@ -217,9 +217,42 @@ test('distinguishes flat and deteriorating recent sequences', () => {
   )
 
   assert.equal(flat.direction, 'flat')
-  assert.match(flat.findings[0], /No meaningful improvement/)
+  assert.match(flat.findings.join(' '), /No meaningful improvement/)
   assert.equal(deteriorating.direction, 'negative')
-  assert.match(deteriorating.findings[0], /Slower across/)
+  assert.match(deteriorating.findings.join(' '), /Slower across/)
+})
+
+test('highlights a repeated back-half fade from comparable split evidence', () => {
+  const results = [
+    result('one', '2026-01-01T00:00:00Z', 57),
+    result('two', '2026-02-01T00:00:00Z', 58),
+    result('three', '2026-03-01T00:00:00Z', 59),
+  ]
+
+  const progression = calculatePerformanceProgression(
+    results[2],
+    results,
+    comparisonMap(...results.map((item) => comparison(item.id))),
+  )
+
+  assert.match(progression.findings[0], /Repeated back-half fade/)
+  assert.match(progression.findings[0], /3 of the last 3/)
+})
+
+test('does not infer a back-half fade from final-time-only results', () => {
+  const results = [
+    result('one', '2026-01-01T00:00:00Z', 57, { segments: [] }),
+    result('two', '2026-02-01T00:00:00Z', 58, { segments: [] }),
+    result('three', '2026-03-01T00:00:00Z', 59, { segments: [] }),
+  ]
+
+  const progression = calculatePerformanceProgression(
+    results[2],
+    results,
+    comparisonMap(...results.map((item) => comparison(item.id))),
+  )
+
+  assert.doesNotMatch(progression.findings.join(' '), /back-half fade/)
 })
 
 test('isolates PB, previous, progression and benchmarks by course', () => {

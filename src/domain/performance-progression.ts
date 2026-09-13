@@ -30,6 +30,7 @@ export interface PerformanceProgression {
 }
 
 const MEANINGFUL_DIFFERENCE_SECONDS = 0.05
+const BACK_HALF_FADE_THRESHOLD_PERCENT = 3
 
 function round(value: number) {
   return Math.round(value * 100) / 100
@@ -43,6 +44,22 @@ function comparisonFinding(difference: number) {
   return difference < 0
     ? `Latest performance is ${Math.abs(difference).toFixed(2)} s faster than PB.`
     : `Latest performance is ${difference.toFixed(2)} s slower than PB.`
+}
+
+function backHalfFadePercent(result: PerformanceResult) {
+  if (result.segments.length < 2 || result.segments.length % 2 !== 0) {
+    return undefined
+  }
+
+  const halfway = result.segments.length / 2
+  const firstHalf = result.segments
+    .slice(0, halfway)
+    .reduce((total, segment) => total + segment.seconds, 0)
+  const backHalf = result.segments
+    .slice(halfway)
+    .reduce((total, segment) => total + segment.seconds, 0)
+
+  return firstHalf > 0 ? ((backHalf - firstHalf) / firstHalf) * 100 : undefined
 }
 
 export function calculatePerformanceProgression(
@@ -146,6 +163,20 @@ export function calculatePerformanceProgression(
   }
   if (latestPoint.pbDifferenceSeconds !== undefined) {
     findings.push(comparisonFinding(latestPoint.pbDifferenceSeconds))
+  }
+
+  const recentFadePercentages = comparableResults
+    .slice(-Math.min(3, comparableResults.length))
+    .map(backHalfFadePercent)
+    .filter((value): value is number => value !== undefined)
+  const fadeCount = recentFadePercentages.filter(
+    (value) => value > BACK_HALF_FADE_THRESHOLD_PERCENT,
+  ).length
+
+  if (recentFadePercentages.length >= 2 && fadeCount >= 2) {
+    findings.unshift(
+      `Repeated back-half fade: ${fadeCount} of the last ${recentFadePercentages.length} comparable performances slowed by more than ${BACK_HALF_FADE_THRESHOLD_PERCENT}% after halfway.`,
+    )
   }
 
   return { points, direction, findings: findings.slice(0, 3) }
