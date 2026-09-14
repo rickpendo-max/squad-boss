@@ -1068,6 +1068,210 @@ progress::-moz-progress-bar {
   margin: 0;
 }
 
+.glance-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.glance-key {
+  color: #718094;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.performance-signal-field {
+  display: flex;
+  min-height: 92px;
+  overflow: hidden;
+  border-block: 1px solid #dfe6ee;
+  background: linear-gradient(90deg, #f9fbfd 0%, #f4f7fa 100%);
+}
+
+.performance-signal {
+  position: relative;
+  display: grid;
+  flex: 1 1 145px;
+  min-width: 0;
+  gap: 3px;
+  align-content: center;
+  padding: 16px 18px 14px 40px;
+  overflow: hidden;
+  border-right: 1px solid #dfe6ee;
+  background: transparent;
+}
+
+.performance-signal:last-child {
+  border-right: 0;
+}
+
+.signal-context {
+  flex-grow: 0.75;
+}
+
+.signal-distribution {
+  flex-grow: 1.55;
+}
+
+.signal-pattern {
+  flex-grow: 1.2;
+}
+
+.performance-signal strong {
+  overflow: hidden;
+  color: #24364b;
+  font-size: 1.2rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-signal small,
+.signal-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signal-label {
+  color: #718094;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.performance-signal small {
+  color: #516176;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.signal-marker {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #8290a2;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.signal-marked .signal-marker {
+  width: 12px;
+  height: 12px;
+}
+
+.signal-strong .signal-marker {
+  width: 16px;
+  height: 16px;
+}
+
+.signal-variance {
+  box-shadow: inset 0 -3px #7546a8;
+}
+
+.signal-variance .signal-marker {
+  border-color: #7546a8;
+  background: #7546a8;
+}
+
+.signal-gain {
+  box-shadow: inset 0 -3px #177f91;
+}
+
+.signal-gain .signal-marker {
+  width: auto;
+  height: auto;
+  border: 0;
+  color: #177f91;
+  font-size: 1rem;
+  font-weight: 900;
+  transform: translateY(-50%);
+}
+
+.signal-gain .signal-marker::before {
+  content: '↘';
+}
+
+.signal-aligned {
+  box-shadow: inset 0 -3px #8290a2;
+}
+
+.signal-recurring {
+  box-shadow: inset 0 -4px #d05a93;
+}
+
+.signal-recurring .signal-marker {
+  border-color: #d05a93;
+  border-radius: 50%;
+  background: transparent;
+  transform: translateY(-50%);
+}
+
+.signal-focus {
+  background: linear-gradient(135deg, rgb(117 70 168 / 12%), transparent 72%);
+}
+
+.signal-focus::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  background: #7546a8;
+  clip-path: polygon(100% 0, 100% 100%, 0 0);
+  content: '';
+}
+
+.evidence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  color: #8290a2;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.evidence-strip span:first-child {
+  color: #516176;
+}
+
+.performance-details {
+  border-top: 1px solid #dfe6ee;
+  color: #516176;
+}
+
+.performance-details > summary {
+  padding-top: 12px;
+  color: #24364b;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.performance-report-source {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.performance-report-source > section {
+  padding: 14px;
+  border-radius: 8px;
+  background: #f7f9fc;
+}
+
+.performance-report-source h4 {
+  margin: 0 0 8px;
+  color: #24364b;
+}
+
 .performance-highlight {
   padding: 18px 20px;
   border-left: 4px solid #1769aa;
@@ -1166,9 +1370,24 @@ progress::-moz-progress-bar {
   }
 }
 
+@media (max-width: 1050px) {
+  .performance-signal-field {
+    flex-wrap: wrap;
+  }
+
+  .performance-signal {
+    flex-basis: calc(33.333% - 1px);
+    border-bottom: 1px solid #dfe6ee;
+  }
+}
+
 @media (max-width: 720px) {
   .performance-context {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .performance-signal {
+    flex-basis: calc(50% - 1px);
   }
 }
 

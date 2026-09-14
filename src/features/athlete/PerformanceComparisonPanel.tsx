@@ -9,6 +9,7 @@ import {
 } from '../../domain/performance-progression'
 import { coachingRepository } from '../../repositories/in-memory-coaching-repository'
 import type {
+  PerformanceComparison,
   PerformanceCourse,
   PerformanceResultType,
   SwimmingStroke,
@@ -57,6 +58,148 @@ function formatDifference(value?: number) {
   return value > 0
     ? `+${value.toFixed(2)} s slower`
     : `${value.toFixed(2)} s faster`
+}
+
+type SignalState = 'gain' | 'aligned' | 'variance' | 'recurring'
+type SignalWeight = 'trace' | 'marked' | 'strong'
+
+type GlanceSignal = {
+  id: string
+  label: string
+  value: string
+  caption: string
+  state: SignalState
+  weight: SignalWeight
+  kind: 'context' | 'distribution' | 'shift' | 'pattern'
+  focus?: boolean
+}
+
+function signalState(value: number): SignalState {
+  if (Math.abs(value) <= 0.05) return 'aligned'
+
+  return value < 0 ? 'gain' : 'variance'
+}
+
+function signalWeight(value: number): SignalWeight {
+  const magnitude = Math.abs(value)
+
+  if (magnitude <= 0.1) return 'trace'
+  if (magnitude <= 0.5) return 'marked'
+
+  return 'strong'
+}
+
+function formatSignalDelta(value?: number) {
+  if (value === undefined) return '—'
+  if (Math.abs(value) <= 0.005) return '±0.00'
+
+  return `${value > 0 ? '+' : '−'}${Math.abs(value).toFixed(2)}`
+}
+
+function signalCaption(value?: number) {
+  if (value === undefined) return 'No comparison'
+  if (Math.abs(value) <= 0.05) return 'Aligned'
+
+  return value < 0 ? 'Faster' : 'Slower'
+}
+
+function buildGlanceSignals(
+  comparison: PerformanceComparison,
+  recurringPattern?: string,
+) {
+  const signals: GlanceSignal[] = []
+
+  for (const context of [
+    { id: 'pb', label: 'PB', value: comparison.pbTotalDifferenceSeconds },
+    {
+      id: 'previous',
+      label: 'Previous',
+      value: comparison.previousTotalDifferenceSeconds,
+    },
+  ]) {
+    if (context.value === undefined) continue
+    signals.push({
+      id: context.id,
+      label: context.label,
+      value: formatSignalDelta(context.value),
+      caption: signalCaption(context.value),
+      state: signalState(context.value),
+      weight: signalWeight(context.value),
+      kind: 'context',
+    })
+  }
+
+  const distribution = comparison.distributionSummary
+  if (distribution) {
+    const front = distribution.firstHalfDifferenceSeconds
+    const back = distribution.secondHalfDifferenceSeconds
+    const useBack =
+      (back > 0 && Math.abs(back) >= Math.abs(front)) ||
+      Math.abs(back) > Math.abs(front)
+    const main = useBack ? back : front
+    const other = useBack ? front : back
+    signals.push({
+      id: 'distribution',
+      label: 'Race distribution',
+      value:
+        Math.abs(main) <= 0.05
+          ? 'ALIGNED'
+          : `${useBack ? 'BACK' : 'FRONT'} ${formatSignalDelta(main)}`,
+      caption: `Other half ${formatSignalDelta(other)}`,
+      state: signalState(main),
+      weight: signalWeight(main),
+      kind: 'distribution',
+      focus: main > 0.05,
+    })
+  }
+
+  const largest = comparison.largestAbsoluteSegmentDeviation
+  const largestDifference = largest?.benchmarkDifferenceSeconds
+  if (largest && largestDifference !== undefined && Math.abs(largestDifference) > 0.05) {
+    signals.push({
+      id: 'shift',
+      label: 'Largest shift',
+      value: `${largest.distanceFrom}–${largest.distanceTo}`,
+      caption: `${formatSignalDelta(largestDifference)} s`,
+      state: signalState(largestDifference),
+      weight: signalWeight(largestDifference),
+      kind: 'shift',
+    })
+  }
+
+  const recurrence = recurringPattern?.match(/(\d+) of the last (\d+)/)
+  if (recurrence) {
+    signals.push({
+      id: 'pattern',
+      label: 'Recurring pattern',
+      value: `${recurrence[1]}/${recurrence[2]}`,
+      caption: 'Back-end distribution',
+      state: 'recurring',
+      weight: 'strong',
+      kind: 'pattern',
+      focus: true,
+    })
+  }
+
+  return signals
+}
+
+function evidenceGaps(
+  comparison: PerformanceComparison,
+  comparableRaceCount: number,
+  recurringPattern?: string,
+) {
+  const gaps: string[] = []
+
+  if (comparison.previousTotalDifferenceSeconds === undefined) {
+    gaps.push('PREVIOUS')
+  }
+  if (!comparison.distributionSummary) gaps.push('DISTRIBUTION')
+  if (!recurringPattern) {
+    gaps.push(`PATTERN ${Math.min(comparableRaceCount, 2)}/2`)
+  }
+
+  return gaps
 }
 
 function displayDate(value: string) {
@@ -194,6 +337,16 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         ),
       )
     : undefined
+  const glanceSignals = comparison
+    ? buildGlanceSignals(comparison, progression?.recurringPattern)
+    : []
+  const unavailableEvidence = comparison
+    ? evidenceGaps(
+        comparison,
+        progression?.points.length ?? 0,
+        progression?.recurringPattern,
+      )
+    : []
 
   function handleDistanceChange(distance: 100 | 200) {
     setForm({
@@ -333,145 +486,175 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
       </section>
 
       <section className="performance-section performance-insight">
-        <h3>Performance Highlight</h3>
-        {progression?.distributionHighlight ? (
-          <p className="performance-highlight">
-            {progression.distributionHighlight}
-          </p>
-        ) : (
-          <p>Expected split distribution is unavailable for this result.</p>
-        )}
-        {progression?.recurringPattern ? (
-          <p className="recurring-pattern">{progression.recurringPattern}</p>
-        ) : progression && progression.points.length >= 2 ? (
-          <p>No repeated distribution pattern established yet.</p>
-        ) : (
-          <p>More comparable performances are needed to identify recurrence.</p>
-        )}
-
+        <div className="glance-heading">
+          <h3>At a Glance</h3>
+          <span className="glance-key">◆ attention · ◇ aligned · ↘ gain</span>
+        </div>
         {selectedResult && comparison ? (
           <>
-            <dl className="comparison-summary performance-context">
-              <div>
-                <dt>Result</dt>
-                <dd>{formatSeconds(selectedResult.totalSeconds)}</dd>
-              </div>
-              <div>
-                <dt>From PB</dt>
-                <dd>{formatDifference(comparison.pbTotalDifferenceSeconds)}</dd>
-              </div>
-              <div>
-                <dt>From previous</dt>
-                <dd>
-                  {formatDifference(comparison.previousTotalDifferenceSeconds)}
-                </dd>
-              </div>
-              <div>
-                <dt>Comparable races</dt>
-                <dd>{progression?.points.length ?? 0}</dd>
-              </div>
-            </dl>
-
-            {comparison.distributionSummary && (
-              <dl className="comparison-summary distribution-summary">
-                <div>
-                  <dt>First half actual / expected</dt>
-                  <dd>
-                    {formatSeconds(
-                      comparison.distributionSummary.firstHalfActualSeconds,
-                    )}{' '}
-                    /{' '}
-                    {formatSeconds(
-                      comparison.distributionSummary.firstHalfExpectedSeconds,
-                    )}
-                  </dd>
-                  <span>
-                    {formatDifference(
-                      comparison.distributionSummary.firstHalfDifferenceSeconds,
-                    )}
-                  </span>
+            <div className="performance-signal-field" role="list">
+              {glanceSignals.map((signal) => (
+                <div
+                  className={`performance-signal signal-${signal.state} signal-${signal.weight} signal-${signal.kind}${signal.focus ? ' signal-focus' : ''}`}
+                  key={signal.id}
+                  role="listitem"
+                >
+                  <span className="signal-marker" aria-hidden="true" />
+                  <span className="signal-label">{signal.label}</span>
+                  <strong>{signal.value}</strong>
+                  <small>{signal.caption}</small>
                 </div>
-                <div>
-                  <dt>Second half actual / expected</dt>
-                  <dd>
-                    {formatSeconds(
-                      comparison.distributionSummary.secondHalfActualSeconds,
-                    )}{' '}
-                    /{' '}
-                    {formatSeconds(
-                      comparison.distributionSummary.secondHalfExpectedSeconds,
-                    )}
-                  </dd>
-                  <span>
-                    {formatDifference(
-                      comparison.distributionSummary.secondHalfDifferenceSeconds,
-                    )}
-                  </span>
-                </div>
-              </dl>
+              ))}
+            </div>
+            {unavailableEvidence.length > 0 && (
+              <div className="evidence-strip" aria-label="Insufficient evidence">
+                <span>○ EVIDENCE</span>
+                {unavailableEvidence.map((gap) => (
+                  <span key={gap}>{gap}</span>
+                ))}
+              </div>
             )}
 
-            {selectedResult.segments.length ? (
-              <div className="comparison-table-wrap">
-                <table className="comparison-table">
-                  <thead>
-                    <tr>
-                      <th>Segment</th>
-                      <th>Actual</th>
-                      <th>Expected distribution</th>
-                      <th>Difference</th>
-                      <th>Previous</th>
-                      <th>From previous</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {comparison.segmentComparisons.map((segment) => (
-                      <tr key={segment.segmentIndex}>
-                        <td>{segment.distanceFrom}–{segment.distanceTo} m</td>
-                        <td>{formatSeconds(segment.actualSeconds)}</td>
-                        <td>{formatSeconds(segment.benchmarkSeconds)}</td>
-                        <td>
-                          {formatDifference(segment.benchmarkDifferenceSeconds)}
-                        </td>
-                        <td>{formatSeconds(segment.previousSeconds)}</td>
-                        <td>
-                          {formatDifference(segment.previousDifferenceSeconds)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p>Split data unavailable for this result.</p>
-            )}
-
-            <details className="benchmark-provenance">
-              <summary>Benchmark method and provenance</summary>
-              {comparison.benchmarkProvenance ? (
-                <div>
+            <details className="performance-details">
+              <summary>Details</summary>
+              <div className="performance-report-source">
+                <section data-report-section="narrative">
+                  <h4>Performance interpretation</h4>
                   <p>
-                    <strong>{comparison.benchmarkProvenance.label}</strong>
+                    {progression?.distributionHighlight ??
+                      'Expected split distribution is unavailable for this result.'}
                   </p>
-                  {comparison.benchmarkProvenance.isOutsidePublishedRange && (
-                    <p>
-                      Outside the original published range. This is an
-                      able-bodied pacing model, not a classification-specific
-                      Para benchmark.
-                    </p>
+                  <p>
+                    {progression?.recurringPattern ??
+                      (progression && progression.points.length >= 2
+                        ? 'No repeated distribution pattern established yet.'
+                        : 'More comparable performances are needed to identify recurrence.')}
+                  </p>
+                </section>
+
+                {comparison.distributionSummary && (
+                  <section data-report-section="half-distribution">
+                    <h4>Half-race distribution</h4>
+                    <dl className="comparison-summary distribution-summary">
+                      <div>
+                        <dt>First half actual / expected</dt>
+                        <dd>
+                          {formatSeconds(
+                            comparison.distributionSummary
+                              .firstHalfActualSeconds,
+                          )}{' '}
+                          /{' '}
+                          {formatSeconds(
+                            comparison.distributionSummary
+                              .firstHalfExpectedSeconds,
+                          )}
+                        </dd>
+                        <span>
+                          {formatDifference(
+                            comparison.distributionSummary
+                              .firstHalfDifferenceSeconds,
+                          )}
+                        </span>
+                      </div>
+                      <div>
+                        <dt>Second half actual / expected</dt>
+                        <dd>
+                          {formatSeconds(
+                            comparison.distributionSummary
+                              .secondHalfActualSeconds,
+                          )}{' '}
+                          /{' '}
+                          {formatSeconds(
+                            comparison.distributionSummary
+                              .secondHalfExpectedSeconds,
+                          )}
+                        </dd>
+                        <span>
+                          {formatDifference(
+                            comparison.distributionSummary
+                              .secondHalfDifferenceSeconds,
+                          )}
+                        </span>
+                      </div>
+                    </dl>
+                  </section>
+                )}
+
+                <section data-report-section="segments">
+                  <h4>Segment comparison</h4>
+                  {selectedResult.segments.length ? (
+                    <div className="comparison-table-wrap">
+                      <table className="comparison-table">
+                        <thead>
+                          <tr>
+                            <th>Segment</th>
+                            <th>Actual</th>
+                            <th>Expected</th>
+                            <th>Difference</th>
+                            <th>Previous</th>
+                            <th>From previous</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {comparison.segmentComparisons.map((segment) => (
+                            <tr key={segment.segmentIndex}>
+                              <td>
+                                {segment.distanceFrom}–{segment.distanceTo} m
+                              </td>
+                              <td>{formatSeconds(segment.actualSeconds)}</td>
+                              <td>{formatSeconds(segment.benchmarkSeconds)}</td>
+                              <td>
+                                {formatDifference(
+                                  segment.benchmarkDifferenceSeconds,
+                                )}
+                              </td>
+                              <td>{formatSeconds(segment.previousSeconds)}</td>
+                              <td>
+                                {formatDifference(
+                                  segment.previousDifferenceSeconds,
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p>Split data unavailable for this result.</p>
                   )}
-                  <p>
-                    Source: {comparison.benchmarkProvenance.source} (
-                    {comparison.benchmarkProvenance.sourceVersion}).{' '}
-                    {comparison.benchmarkProvenance.basis}.
-                  </p>
-                </div>
-              ) : (
-                <p>No applicable benchmark available.</p>
-              )}
+                </section>
+
+                <section data-report-section="benchmark-provenance">
+                  <h4>Benchmark method and provenance</h4>
+                  {comparison.benchmarkProvenance ? (
+                    <>
+                      <p>
+                        <strong>{comparison.benchmarkProvenance.label}</strong>
+                      </p>
+                      {comparison.benchmarkProvenance
+                        .isOutsidePublishedRange && (
+                        <p>
+                          Outside the original published range. This is an
+                          able-bodied pacing model, not a
+                          classification-specific Para benchmark.
+                        </p>
+                      )}
+                      <p>
+                        Source: {comparison.benchmarkProvenance.source} (
+                        {comparison.benchmarkProvenance.sourceVersion}).{' '}
+                        {comparison.benchmarkProvenance.basis}.
+                      </p>
+                    </>
+                  ) : (
+                    <p>No applicable benchmark available.</p>
+                  )}
+                </section>
+              </div>
             </details>
           </>
-        ) : null}
+        ) : (
+          <p>Add a performance result to generate a comparison.</p>
+        )}
       </section>
 
       <section className="performance-section">
