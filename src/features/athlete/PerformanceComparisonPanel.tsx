@@ -672,6 +672,9 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         {comparison?.benchmarkMatchStatus === 'unavailable' && (
           <p>No applicable QAS benchmark available.</p>
         )}
+        {comparison?.benchmarkMatchStatus === 'out-of-range' && (
+          <p>Result is outside the published QAS pacing-chart range.</p>
+        )}
       </section>
 
       <section className="performance-section">

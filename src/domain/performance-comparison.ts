@@ -124,11 +124,31 @@ export function calculatePerformanceComparison(
   )
   const eligibleBenchmarkProfiles = baseBenchmarkProfiles.filter(
     (profile) =>
-      !profile.sex &&
+      (!profile.sex || profile.sex === athlete.sex) &&
       (!profile.classification ||
         profile.classification === athlete.classification),
   )
-  const benchmark = eligibleBenchmarkProfiles[0]
+  const targetTimedProfiles = eligibleBenchmarkProfiles
+    .filter(
+      (profile): profile is BenchmarkProfile & { targetTotalSeconds: number } =>
+        profile.targetTotalSeconds !== undefined,
+    )
+    .toSorted(
+      (left, right) => left.targetTotalSeconds - right.targetTotalSeconds,
+    )
+  const resultWithinPublishedRange =
+    targetTimedProfiles.length > 0 &&
+    result.totalSeconds >= targetTimedProfiles[0].targetTotalSeconds &&
+    result.totalSeconds <= targetTimedProfiles.at(-1)!.targetTotalSeconds
+  const benchmark = targetTimedProfiles.length
+    ? resultWithinPublishedRange
+      ? targetTimedProfiles.toSorted(
+          (left, right) =>
+            Math.abs(left.targetTotalSeconds - result.totalSeconds) -
+            Math.abs(right.targetTotalSeconds - result.totalSeconds),
+        )[0]
+      : undefined
+    : eligibleBenchmarkProfiles[0]
   const benchmarkSegmentsCompatible =
     benchmark !== undefined &&
     result.segments.length > 0 &&
@@ -142,7 +162,9 @@ export function calculatePerformanceComparison(
   const benchmarkMatchStatus =
     baseBenchmarkProfiles.length === 0
       ? 'unavailable'
-      : !benchmark
+      : targetTimedProfiles.length > 0 && !resultWithinPublishedRange
+        ? 'out-of-range'
+        : !benchmark
         ? 'incompatible'
         : benchmarkSegmentsCompatible
           ? 'exact'
@@ -232,15 +254,14 @@ export function calculatePerformanceComparison(
   const pbTotalDifferenceSeconds =
     pbSeconds !== undefined ? round(result.totalSeconds - pbSeconds) : undefined
   const benchmarkExpectedTotal =
-    benchmark !== undefined &&
-    benchmark.segments.every(
-      (segment) => segment.expectedSeconds !== undefined,
-    )
+    benchmark?.targetTotalSeconds ??
+    (benchmark !== undefined &&
+    benchmark.segments.every((segment) => segment.expectedSeconds !== undefined)
       ? benchmark.segments.reduce(
           (total, segment) => total + segment.expectedSeconds!,
           0,
         )
-      : undefined
+      : undefined)
   const benchmarkTotalDifferenceSeconds =
     benchmarkExpectedTotal !== undefined
       ? round(result.totalSeconds - benchmarkExpectedTotal)
@@ -323,6 +344,15 @@ export function calculatePerformanceComparison(
       comparisonType: 'benchmark',
       metricOrSegment: 'benchmark',
       summary: 'No applicable QAS benchmark available.',
+    })
+  }
+
+  if (findings.length === 0 && benchmarkMatchStatus === 'out-of-range') {
+    findings.push({
+      findingType: 'availability',
+      comparisonType: 'benchmark',
+      metricOrSegment: 'benchmark',
+      summary: 'Result is outside the published QAS pacing-chart range.',
     })
   }
 

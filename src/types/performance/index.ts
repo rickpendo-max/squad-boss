@@ -78,8 +78,9 @@ export interface BenchmarkProfile {
   distance: number
   stroke: SwimmingStroke
   course: PerformanceCourse
-  sex?: string
+  sex?: 'female' | 'male'
   classification?: string
+  targetTotalSeconds?: number
   basis: string
   segments: BenchmarkSegment[]
 }
@@ -89,6 +90,7 @@ export type BenchmarkMatchStatus =
   | 'partial'
   | 'unavailable'
   | 'incompatible'
+  | 'out-of-range'
 
 export interface PerformanceSegmentComparison {
   segmentIndex: number

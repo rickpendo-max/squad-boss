@@ -10,7 +10,7 @@ export type { AthleteCoach, CoachNote } from './coach'
 export type { AthleteCompass, AthleteCompassData } from './compass'
 export type { AthleteCompetition } from './competition'
 export type { AthletePerformance, PersonalBest } from './performance'
-export type { AthleteProfile, AthleteStatus } from './profile'
+export type { AthleteProfile, AthleteSex, AthleteStatus } from './profile'
 export type { AthleteTesting, TestResult } from './testing'
 export type { AthleteTraining, Readiness } from './training'
 

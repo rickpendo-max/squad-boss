@@ -19,6 +19,10 @@ import type {
   BenchmarkProfile,
   PerformanceResult,
 } from '../src/types/performance/index.ts'
+import {
+  qasPacingBenchmarkProfiles,
+  qasPacingBenchmarkSet,
+} from '../src/data/benchmarks/qas-pacing-benchmarks.ts'
 
 const [sam, maddie] = athletes
 
@@ -1298,4 +1302,88 @@ test('handles an unavailable QAS benchmark without error', () => {
     comparison.findings.map((finding) => finding.summary).join(' '),
     /No applicable QAS benchmark available/,
   )
+})
+
+test('matches Maddie to the authoritative female 200 LCM freestyle row', () => {
+  const athlete = { ...maddie, sex: 'female' as const }
+  const performance = {
+    ...performanceResult,
+    id: 'maddie-200-free',
+    athleteId: athlete.id,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 124.5,
+    segments: [
+      { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, seconds: 29.5 },
+      { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, seconds: 31.5 },
+      { segmentIndex: 3, distanceFrom: 100, distanceTo: 150, seconds: 32 },
+      { segmentIndex: 4, distanceFrom: 150, distanceTo: 200, seconds: 31.5 },
+    ],
+  }
+  const repository = createPerformanceRepository(
+    [performance],
+    qasPacingBenchmarkProfiles,
+  )
+  const comparison = repository.getPerformanceComparison(performance.id)
+
+  assert.equal(qasPacingBenchmarkSet.status, 'active')
+  assert.equal(
+    comparison.benchmarkProfileId,
+    'qas-200-lcm-freestyle-female-124.5',
+  )
+  assert.equal(comparison.benchmarkMatchStatus, 'exact')
+  assert.equal(comparison.benchmarkTotalDifferenceSeconds, 0)
+  assert.deepEqual(
+    comparison.segmentComparisons.map((segment) => segment.benchmarkSeconds),
+    [29.19, 31.49, 32.07, 31.75],
+  )
+  assert.deepEqual(
+    comparison.segmentComparisons.map(
+      (segment) => segment.benchmarkDifferenceSeconds,
+    ),
+    [0.31, 0.01, -0.07, -0.25],
+  )
+})
+
+test('retains the published male and female 200 freestyle chart ranges', () => {
+  const femaleProfiles = qasPacingBenchmarkProfiles.filter(
+    (profile) => profile.sex === 'female',
+  )
+  const maleProfiles = qasPacingBenchmarkProfiles.filter(
+    (profile) => profile.sex === 'male',
+  )
+
+  assert.equal(femaleProfiles.length, 35)
+  assert.equal(femaleProfiles[0].targetTotalSeconds, 111)
+  assert.equal(femaleProfiles.at(-1)?.targetTotalSeconds, 128)
+  assert.equal(maleProfiles.length, 35)
+  assert.equal(maleProfiles[0].targetTotalSeconds, 100)
+  assert.equal(maleProfiles.at(-1)?.targetTotalSeconds, 117)
+})
+
+test('does not cross-match sex-specific 200 freestyle pacing rows', () => {
+  const athlete = { ...maddie, sex: 'female' as const }
+  const performance = {
+    ...performanceResult,
+    id: 'maddie-male-range',
+    athleteId: athlete.id,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 110,
+    segments: [
+      { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, seconds: 26 },
+      { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, seconds: 28 },
+      { segmentIndex: 3, distanceFrom: 100, distanceTo: 150, seconds: 28 },
+      { segmentIndex: 4, distanceFrom: 150, distanceTo: 200, seconds: 28 },
+    ],
+  }
+  const repository = createPerformanceRepository(
+    [performance],
+    qasPacingBenchmarkProfiles,
+  )
+
+  const comparison = repository.getPerformanceComparison(performance.id)
+  assert.equal(comparison.benchmarkProfileId, undefined)
+  assert.equal(comparison.benchmarkMatchStatus, 'out-of-range')
+  assert.match(comparison.findings[0].summary, /outside the published/)
 })
