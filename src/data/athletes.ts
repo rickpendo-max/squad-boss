@@ -67,6 +67,7 @@ export const athletes: Athlete[] = [
     lastName: 'McTernan',
     fullName: 'Maddie McTernan',
     sex: 'female',
+    classification: 'S14',
 
     status: 'Ready',
     statusNote: 'Full training',

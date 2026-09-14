@@ -81,8 +81,46 @@ export interface BenchmarkProfile {
   sex?: 'female' | 'male'
   classification?: string
   targetTotalSeconds?: number
+  modelCategory?: BenchmarkModelCategory
+  label?: string
+  source?: string
+  sourceVersion?: string
+  isPublished?: boolean
   basis: string
   segments: BenchmarkSegment[]
+}
+
+export type BenchmarkModelCategory =
+  | 'classification-para'
+  | 'athlete-personal'
+  | 'coach-selected'
+  | 'population-able-bodied'
+
+export interface BenchmarkEquation {
+  distance: number
+  intercept: number
+  totalSecondsCoefficient: number
+}
+
+export interface DerivedBenchmarkModel {
+  id: string
+  benchmarkSetId: string
+  label: string
+  event: string
+  distance: number
+  stroke: SwimmingStroke
+  course: PerformanceCourse
+  sex?: 'female' | 'male'
+  classification?: string
+  modelCategory: BenchmarkModelCategory
+  source: string
+  sourceVersion: string
+  basis: string
+  publishedRange: {
+    minimumTotalSeconds: number
+    maximumTotalSeconds: number
+  }
+  cumulativeEquations: BenchmarkEquation[]
 }
 
 export type BenchmarkMatchStatus =
@@ -91,6 +129,21 @@ export type BenchmarkMatchStatus =
   | 'unavailable'
   | 'incompatible'
   | 'out-of-range'
+  | 'derived'
+
+export interface BenchmarkProvenance {
+  label: string
+  source: string
+  sourceVersion: string
+  basis: string
+  modelCategory: BenchmarkModelCategory
+  isPublished: boolean
+  isOutsidePublishedRange: boolean
+  publishedRange?: {
+    minimumTotalSeconds: number
+    maximumTotalSeconds: number
+  }
+}
 
 export interface PerformanceSegmentComparison {
   segmentIndex: number
@@ -122,6 +175,8 @@ export interface PerformanceComparison {
   previousResultId?: string
   pbResultId?: string
   benchmarkProfileId?: string
+  benchmarkModelId?: string
+  benchmarkProvenance?: BenchmarkProvenance
   previousTotalDifferenceSeconds?: number
   pbTotalDifferenceSeconds?: number
   benchmarkTotalDifferenceSeconds?: number

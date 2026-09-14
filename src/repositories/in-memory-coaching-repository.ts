@@ -6,7 +6,10 @@ import {
   priorities,
 } from '../data/coaching.ts'
 import { athletes } from '../data/athletes.ts'
-import { qasPacingBenchmarkProfiles } from '../data/benchmarks/qas-pacing-benchmarks.ts'
+import {
+  qasPacingBenchmarkProfiles,
+  qasPacingDerivedModels,
+} from '../data/benchmarks/qas-pacing-benchmarks.ts'
 import { calculatePerformanceComparison } from '../domain/performance-comparison.ts'
 import { priorityCategories } from '../types/coaching/priority.ts'
 import type { Athlete } from '../types/athlete'
@@ -18,6 +21,7 @@ import type {
 } from '../types/coaching'
 import type {
   BenchmarkProfile,
+  DerivedBenchmarkModel,
   PerformanceResult,
 } from '../types/performance'
 import type {
@@ -44,6 +48,7 @@ export interface InMemoryCoachingData {
   decisions: Decision[]
   performanceResults?: PerformanceResult[]
   benchmarkProfiles?: BenchmarkProfile[]
+  derivedBenchmarkModels?: DerivedBenchmarkModel[]
 }
 
 export interface InMemoryCoachingDependencies {
@@ -556,6 +561,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
       this.data.performanceResults ?? [],
       athlete,
       this.data.benchmarkProfiles ?? [],
+      this.data.derivedBenchmarkModels ?? [],
     )
   }
 
@@ -736,6 +742,7 @@ const seedCoachingData: InMemoryCoachingData = {
   decisions,
   performanceResults,
   benchmarkProfiles: qasPacingBenchmarkProfiles,
+  derivedBenchmarkModels: qasPacingDerivedModels,
 }
 
 function getBrowserStorage(): KeyValueStorage | undefined {

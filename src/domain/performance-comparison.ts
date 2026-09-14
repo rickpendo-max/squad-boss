@@ -1,6 +1,9 @@
 import type { Athlete } from '../types/athlete'
 import type {
+  BenchmarkModelCategory,
   BenchmarkProfile,
+  BenchmarkProvenance,
+  DerivedBenchmarkModel,
   PerformanceComparison,
   PerformanceFinding,
   PerformanceResult,
@@ -8,6 +11,13 @@ import type {
   PerformanceSegmentComparison,
   SwimmingStroke,
 } from '../types/performance'
+
+const benchmarkCategoryPriority: Record<BenchmarkModelCategory, number> = {
+  'classification-para': 400,
+  'athlete-personal': 300,
+  'coach-selected': 200,
+  'population-able-bodied': 100,
+}
 
 function round(value: number) {
   return Math.round(value * 100) / 100
@@ -86,11 +96,53 @@ function differenceSummary(
     : `${subject} was ${difference.toFixed(2)} s slower than ${reference}.`
 }
 
+function createDerivedProfile(
+  model: DerivedBenchmarkModel,
+  totalSeconds: number,
+): BenchmarkProfile {
+  const cumulative = [
+    0,
+    ...model.cumulativeEquations.map((equation) =>
+      round(
+        equation.intercept + equation.totalSecondsCoefficient * totalSeconds,
+      ),
+    ),
+    totalSeconds,
+  ]
+
+  return {
+    id: `${model.id}-${totalSeconds.toFixed(2)}`,
+    benchmarkSetId: model.benchmarkSetId,
+    event: model.event,
+    distance: model.distance,
+    stroke: model.stroke,
+    course: model.course,
+    sex: model.sex,
+    classification: model.classification,
+    targetTotalSeconds: totalSeconds,
+    modelCategory: model.modelCategory,
+    label: model.label,
+    source: model.source,
+    sourceVersion: model.sourceVersion,
+    isPublished: false,
+    basis: model.basis,
+    segments: cumulative.slice(1).map((value, index) => ({
+      segmentIndex: index + 1,
+      distanceFrom: index * 50,
+      distanceTo: (index + 1) * 50,
+      expectedSeconds: round(value - cumulative[index]),
+      metricCode: `${model.id}-${totalSeconds.toFixed(2)}-${index + 1}`,
+      unit: 'seconds',
+    })),
+  }
+}
+
 export function calculatePerformanceComparison(
   result: PerformanceResult,
   allResults: PerformanceResult[],
   athlete: Athlete,
   benchmarkProfiles: BenchmarkProfile[],
+  derivedBenchmarkModels: DerivedBenchmarkModel[] = [],
 ): PerformanceComparison {
   const comparable = allResults.filter(
     (candidate) => candidate.id !== result.id && isComparable(result, candidate),
@@ -128,7 +180,32 @@ export function calculatePerformanceComparison(
       (!profile.classification ||
         profile.classification === athlete.classification),
   )
-  const targetTimedProfiles = eligibleBenchmarkProfiles
+  const eligibleDerivedModels = derivedBenchmarkModels.filter(
+    (model) =>
+      model.distance === result.distance &&
+      model.stroke === result.stroke &&
+      model.course === result.course &&
+      (!model.sex || model.sex === athlete.sex) &&
+      (!model.classification || model.classification === athlete.classification),
+  )
+  const categories = [
+    ...eligibleBenchmarkProfiles.map(
+      (profile) => profile.modelCategory ?? 'population-able-bodied',
+    ),
+    ...eligibleDerivedModels.map((model) => model.modelCategory),
+  ]
+  const selectedCategory = categories.toSorted(
+    (left, right) =>
+      benchmarkCategoryPriority[right] - benchmarkCategoryPriority[left],
+  )[0]
+  const selectedProfiles = eligibleBenchmarkProfiles.filter(
+    (profile) =>
+      (profile.modelCategory ?? 'population-able-bodied') === selectedCategory,
+  )
+  const selectedDerivedModel = eligibleDerivedModels.find(
+    (model) => model.modelCategory === selectedCategory,
+  )
+  const targetTimedProfiles = selectedProfiles
     .filter(
       (profile): profile is BenchmarkProfile & { targetTotalSeconds: number } =>
         profile.targetTotalSeconds !== undefined,
@@ -140,6 +217,12 @@ export function calculatePerformanceComparison(
     targetTimedProfiles.length > 0 &&
     result.totalSeconds >= targetTimedProfiles[0].targetTotalSeconds &&
     result.totalSeconds <= targetTimedProfiles.at(-1)!.targetTotalSeconds
+  const derivedBenchmark =
+    targetTimedProfiles.length > 0 &&
+    !resultWithinPublishedRange &&
+    selectedDerivedModel
+      ? createDerivedProfile(selectedDerivedModel, result.totalSeconds)
+      : undefined
   const benchmark = targetTimedProfiles.length
     ? resultWithinPublishedRange
       ? targetTimedProfiles.toSorted(
@@ -147,8 +230,21 @@ export function calculatePerformanceComparison(
             Math.abs(left.targetTotalSeconds - result.totalSeconds) -
             Math.abs(right.targetTotalSeconds - result.totalSeconds),
         )[0]
-      : undefined
-    : eligibleBenchmarkProfiles[0]
+      : derivedBenchmark
+    : selectedProfiles[0]
+  const benchmarkProvenance: BenchmarkProvenance | undefined = benchmark
+    ? {
+        label: benchmark.label ?? 'Benchmark',
+        source: benchmark.source ?? benchmark.basis,
+        sourceVersion: benchmark.sourceVersion ?? 'Not specified',
+        basis: benchmark.basis,
+        modelCategory:
+          benchmark.modelCategory ?? 'population-able-bodied',
+        isPublished: benchmark.isPublished === true,
+        isOutsidePublishedRange: derivedBenchmark !== undefined,
+        publishedRange: selectedDerivedModel?.publishedRange,
+      }
+    : undefined
   const benchmarkSegmentsCompatible =
     benchmark !== undefined &&
     result.segments.length > 0 &&
@@ -160,9 +256,11 @@ export function calculatePerformanceComparison(
     )
 
   const benchmarkMatchStatus =
-    baseBenchmarkProfiles.length === 0
+    baseBenchmarkProfiles.length === 0 && eligibleDerivedModels.length === 0
       ? 'unavailable'
-      : targetTimedProfiles.length > 0 && !resultWithinPublishedRange
+      : derivedBenchmark
+        ? 'derived'
+        : targetTimedProfiles.length > 0 && !resultWithinPublishedRange
         ? 'out-of-range'
         : !benchmark
         ? 'incompatible'
@@ -298,7 +396,9 @@ export function calculatePerformanceComparison(
       summary: differenceSummary(
         segmentLabel(largestPositiveSegmentDeviation),
         largestPositiveSegmentDeviation.benchmarkDifferenceSeconds,
-        'the QAS pacing reference',
+        benchmarkProvenance?.isPublished
+          ? 'the published SpeedChart benchmark'
+          : 'the SpeedChart-derived able-bodied model',
       ),
     })
   }
@@ -361,6 +461,8 @@ export function calculatePerformanceComparison(
     previousResultId: previous?.id,
     pbResultId: useLegacyPb ? undefined : storedPb?.id,
     benchmarkProfileId: benchmark?.id,
+    benchmarkModelId: derivedBenchmark ? selectedDerivedModel?.id : undefined,
+    benchmarkProvenance,
     previousTotalDifferenceSeconds,
     pbTotalDifferenceSeconds,
     benchmarkTotalDifferenceSeconds,

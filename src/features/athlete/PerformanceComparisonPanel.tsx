@@ -650,11 +650,14 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
               <dd>{formatDifference(comparison.pbTotalDifferenceSeconds)}</dd>
             </div>
             <div>
-              <dt>QAS benchmark</dt>
-              <dd>{comparison.benchmarkMatchStatus}</dd>
+              <dt>Benchmark</dt>
+              <dd>
+                {comparison.benchmarkProvenance?.label ??
+                  comparison.benchmarkMatchStatus}
+              </dd>
             </div>
             <div>
-              <dt>From QAS benchmark</dt>
+              <dt>From benchmark</dt>
               <dd>{formatDifference(comparison.benchmarkTotalDifferenceSeconds)}</dd>
             </div>
             <div>
@@ -675,6 +678,20 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         {comparison?.benchmarkMatchStatus === 'out-of-range' && (
           <p>Result is outside the published QAS pacing-chart range.</p>
         )}
+        {comparison?.benchmarkProvenance?.isOutsidePublishedRange && (
+          <p>
+            Result is outside the original published range. This comparison
+            uses a validated able-bodied pacing model, not a published value or
+            a classification-specific Para benchmark.
+          </p>
+        )}
+        {comparison?.benchmarkProvenance && (
+          <p>
+            Source: {comparison.benchmarkProvenance.source} (
+            {comparison.benchmarkProvenance.sourceVersion}).{' '}
+            {comparison.benchmarkProvenance.basis}.
+          </p>
+        )}
       </section>
 
       <section className="performance-section">
@@ -688,7 +705,7 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
                   <th>Actual</th>
                   <th>Previous</th>
                   <th>Difference</th>
-                  <th>QAS</th>
+                  <th>{comparison.benchmarkProvenance?.label ?? 'Benchmark'}</th>
                   <th>Difference</th>
                 </tr>
               </thead>

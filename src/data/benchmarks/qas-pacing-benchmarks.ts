@@ -1,12 +1,15 @@
 import type {
+  DerivedBenchmarkModel,
   BenchmarkProfile,
   BenchmarkSet,
 } from '../../types/performance'
 
+const source = "Swimming Australia 'SpeedChart' - coach-supplied source PDF"
+
 export const qasPacingBenchmarkSet: BenchmarkSet = {
   id: 'qas-pacing-charts',
   name: 'QAS Pacing Benchmarks',
-  source: "Swimming Australia 'SpeedChart' - coach-supplied source PDF",
+  source,
   sourceVersion: 'December 2011',
   benchmarkType: 'race-pacing',
   status: 'active',
@@ -76,6 +79,11 @@ function create200Profiles(
       stroke: 'freestyle',
       course: 'LCM',
       sex,
+      modelCategory: 'population-able-bodied',
+      label: 'Published SpeedChart benchmark',
+      source,
+      sourceVersion: qasPacingBenchmarkSet.sourceVersion,
+      isPublished: true,
       targetTotalSeconds,
       basis: "Swimming Australia 'SpeedChart' cumulative 50 m marks",
       segments: cumulative.slice(1).map((value, index) => ({
@@ -93,4 +101,53 @@ function create200Profiles(
 export const qasPacingBenchmarkProfiles: BenchmarkProfile[] = [
   ...create200Profiles('female', female200LcmFreestyle),
   ...create200Profiles('male', male200LcmFreestyle),
+]
+
+export const qasPacingDerivedModels: DerivedBenchmarkModel[] = [
+  {
+    id: 'speedchart-derived-200-lcm-freestyle-female',
+    benchmarkSetId: qasPacingBenchmarkSet.id,
+    label: 'SpeedChart-derived able-bodied model',
+    event: '200 m freestyle',
+    distance: 200,
+    stroke: 'freestyle',
+    course: 'LCM',
+    sex: 'female',
+    modelCategory: 'population-able-bodied',
+    source,
+    sourceVersion: qasPacingBenchmarkSet.sourceVersion,
+    basis: 'Sex-specific linear equations validated against all 35 published female rows',
+    publishedRange: {
+      minimumTotalSeconds: 111,
+      maximumTotalSeconds: 128,
+    },
+    cumulativeEquations: [
+      { distance: 50, intercept: 4.972747899, totalSecondsCoefficient: 0.194504202 },
+      { distance: 100, intercept: 6.123577031, totalSecondsCoefficient: 0.438179272 },
+      { distance: 150, intercept: 3.260229692, totalSecondsCoefficient: 0.718778711 },
+    ],
+  },
+  {
+    id: 'speedchart-derived-200-lcm-freestyle-male',
+    benchmarkSetId: qasPacingBenchmarkSet.id,
+    label: 'SpeedChart-derived able-bodied model',
+    event: '200 m freestyle',
+    distance: 200,
+    stroke: 'freestyle',
+    course: 'LCM',
+    sex: 'male',
+    modelCategory: 'population-able-bodied',
+    source,
+    sourceVersion: qasPacingBenchmarkSet.sourceVersion,
+    basis: 'Sex-specific linear equations validated against all 35 published male rows',
+    publishedRange: {
+      minimumTotalSeconds: 100,
+      maximumTotalSeconds: 117,
+    },
+    cumulativeEquations: [
+      { distance: 50, intercept: 4.748389356, totalSecondsCoefficient: 0.191456583 },
+      { distance: 100, intercept: 5.387904762, totalSecondsCoefficient: 0.439047619 },
+      { distance: 150, intercept: 3.248039216, totalSecondsCoefficient: 0.715686275 },
+    ],
+  },
 ]

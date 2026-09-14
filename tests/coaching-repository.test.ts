@@ -17,11 +17,13 @@ import type {
 } from '../src/types/coaching/index.ts'
 import type {
   BenchmarkProfile,
+  DerivedBenchmarkModel,
   PerformanceResult,
 } from '../src/types/performance/index.ts'
 import {
   qasPacingBenchmarkProfiles,
   qasPacingBenchmarkSet,
+  qasPacingDerivedModels,
 } from '../src/data/benchmarks/qas-pacing-benchmarks.ts'
 
 const [sam, maddie] = athletes
@@ -666,6 +668,7 @@ const performanceResult: PerformanceResult = {
 function createPerformanceRepository(
   existingResults: PerformanceResult[] = [],
   benchmarkProfiles: BenchmarkProfile[] = [],
+  derivedBenchmarkModels: DerivedBenchmarkModel[] = [],
 ) {
   return new InMemoryCoachingRepository(
     {
@@ -676,6 +679,7 @@ function createPerformanceRepository(
       decisions: [],
       performanceResults: existingResults,
       benchmarkProfiles,
+      derivedBenchmarkModels,
     },
     {
       createId: () => 'created-performance',
@@ -1332,6 +1336,11 @@ test('matches Maddie to the authoritative female 200 LCM freestyle row', () => {
     'qas-200-lcm-freestyle-female-124.5',
   )
   assert.equal(comparison.benchmarkMatchStatus, 'exact')
+  assert.equal(
+    comparison.benchmarkProvenance?.label,
+    'Published SpeedChart benchmark',
+  )
+  assert.equal(comparison.benchmarkProvenance?.isPublished, true)
   assert.equal(comparison.benchmarkTotalDifferenceSeconds, 0)
   assert.deepEqual(
     comparison.segmentComparisons.map((segment) => segment.benchmarkSeconds),
@@ -1361,7 +1370,7 @@ test('retains the published male and female 200 freestyle chart ranges', () => {
   assert.equal(maleProfiles.at(-1)?.targetTotalSeconds, 117)
 })
 
-test('does not cross-match sex-specific 200 freestyle pacing rows', () => {
+test('does not cross-match sex-specific published pacing rows', () => {
   const athlete = { ...maddie, sex: 'female' as const }
   const performance = {
     ...performanceResult,
@@ -1386,4 +1395,168 @@ test('does not cross-match sex-specific 200 freestyle pacing rows', () => {
   assert.equal(comparison.benchmarkProfileId, undefined)
   assert.equal(comparison.benchmarkMatchStatus, 'out-of-range')
   assert.match(comparison.findings[0].summary, /outside the published/)
+})
+
+test('derives Maddie pacing outside the female published range', () => {
+  const athlete = { ...maddie, sex: 'female' as const, classification: 'S14' }
+  const performance = {
+    ...performanceResult,
+    id: 'maddie-derived-200-free',
+    athleteId: athlete.id,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 137.4,
+    segments: [
+      { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, seconds: 31.7 },
+      { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, seconds: 34.63 },
+      { segmentIndex: 3, distanceFrom: 100, distanceTo: 150, seconds: 35.69 },
+      { segmentIndex: 4, distanceFrom: 150, distanceTo: 200, seconds: 35.38 },
+    ],
+  }
+  const repository = new InMemoryCoachingRepository(
+    {
+      athletes: [athlete],
+      observations: [],
+      interpretations: [],
+      priorities: [],
+      decisions: [],
+      performanceResults: [performance],
+      benchmarkProfiles: qasPacingBenchmarkProfiles,
+      derivedBenchmarkModels: qasPacingDerivedModels,
+    },
+    {
+      createId: () => 'unused',
+      now: () => '2026-07-25T00:00:00Z',
+    },
+  )
+
+  const comparison = repository.getPerformanceComparison(performance.id)
+
+  assert.equal(comparison.benchmarkMatchStatus, 'derived')
+  assert.equal(
+    comparison.benchmarkModelId,
+    'speedchart-derived-200-lcm-freestyle-female',
+  )
+  assert.equal(
+    comparison.benchmarkProvenance?.label,
+    'SpeedChart-derived able-bodied model',
+  )
+  assert.equal(comparison.benchmarkProvenance?.isPublished, false)
+  assert.equal(
+    comparison.benchmarkProvenance?.isOutsidePublishedRange,
+    true,
+  )
+  assert.equal(
+    comparison.benchmarkProvenance?.modelCategory,
+    'population-able-bodied',
+  )
+  assert.deepEqual(
+    comparison.segmentComparisons.map((segment) => segment.benchmarkSeconds),
+    [31.7, 34.63, 35.69, 35.38],
+  )
+  assert.deepEqual(
+    comparison.segmentComparisons.map((segment) =>
+      Math.round(
+        (segment.benchmarkSeconds! +
+          comparison.segmentComparisons
+            .slice(0, segment.segmentIndex - 1)
+            .reduce((total, prior) => total + prior.benchmarkSeconds!, 0)) *
+          100,
+      ) / 100,
+    ),
+    [31.7, 66.33, 102.02, 137.4],
+  )
+  assert.match(comparison.benchmarkProvenance!.basis, /35 published female rows/)
+})
+
+test('derived pacing model remains sex-specific', () => {
+  const maleOnlyModels = qasPacingDerivedModels.filter(
+    (model) => model.sex === 'male',
+  )
+  const performance = {
+    ...performanceResult,
+    id: 'female-with-male-model',
+    athleteId: maddie.id,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 137.4,
+    segments: [
+      { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, seconds: 31.7 },
+      { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, seconds: 34.63 },
+      { segmentIndex: 3, distanceFrom: 100, distanceTo: 150, seconds: 35.69 },
+      { segmentIndex: 4, distanceFrom: 150, distanceTo: 200, seconds: 35.38 },
+    ],
+  }
+  const repository = createPerformanceRepository(
+    [performance],
+    [],
+    maleOnlyModels,
+  )
+
+  const comparison = repository.getPerformanceComparison(performance.id)
+
+  assert.equal(comparison.benchmarkMatchStatus, 'unavailable')
+  assert.equal(comparison.benchmarkModelId, undefined)
+})
+
+test('prefers a valid classification-specific Para population benchmark', () => {
+  const athlete = { ...maddie, sex: 'female' as const, classification: 'S14' }
+  const performance = {
+    ...performanceResult,
+    id: 'maddie-para-priority',
+    athleteId: athlete.id,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 137.4,
+    segments: [
+      { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, seconds: 32 },
+      { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, seconds: 34 },
+      { segmentIndex: 3, distanceFrom: 100, distanceTo: 150, seconds: 35 },
+      { segmentIndex: 4, distanceFrom: 150, distanceTo: 200, seconds: 36.4 },
+    ],
+  }
+  const paraProfile: BenchmarkProfile = {
+    id: 'future-s14-200-free-profile',
+    benchmarkSetId: 'future-para-set',
+    event: '200 m freestyle',
+    distance: 200,
+    stroke: 'freestyle',
+    course: 'LCM',
+    sex: 'female',
+    classification: 'S14',
+    targetTotalSeconds: 137.4,
+    modelCategory: 'classification-para',
+    label: 'S14 population benchmark',
+    source: 'Synthetic priority test only',
+    sourceVersion: 'test',
+    isPublished: true,
+    basis: 'Synthetic priority test only',
+    segments: performance.segments.map((segment) => ({
+      ...segment,
+      expectedSeconds: segment.seconds,
+      metricCode: `test-${segment.segmentIndex}`,
+      unit: 'seconds' as const,
+    })),
+  }
+  const repository = new InMemoryCoachingRepository(
+    {
+      athletes: [athlete],
+      observations: [],
+      interpretations: [],
+      priorities: [],
+      decisions: [],
+      performanceResults: [performance],
+      benchmarkProfiles: [...qasPacingBenchmarkProfiles, paraProfile],
+      derivedBenchmarkModels: qasPacingDerivedModels,
+    },
+    { createId: () => 'unused', now: () => '2026-07-25T00:00:00Z' },
+  )
+
+  const comparison = repository.getPerformanceComparison(performance.id)
+
+  assert.equal(comparison.benchmarkProfileId, paraProfile.id)
+  assert.equal(
+    comparison.benchmarkProvenance?.modelCategory,
+    'classification-para',
+  )
 })
