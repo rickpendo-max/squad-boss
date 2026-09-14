@@ -80,11 +80,7 @@ function ProgressionChart({
   const height = 190
   const horizontalPadding = 42
   const verticalPadding = 28
-  const benchmarkSeconds = progression.points.find(
-    (point) => point.benchmarkSeconds !== undefined,
-  )?.benchmarkSeconds
   const plottedTimes = progression.points.map((point) => point.totalSeconds)
-  if (benchmarkSeconds !== undefined) plottedTimes.push(benchmarkSeconds)
   const minimum = Math.min(...plottedTimes)
   const maximum = Math.max(...plottedTimes)
   const range = maximum - minimum || 1
@@ -116,25 +112,6 @@ function ProgressionChart({
           y1={height - verticalPadding}
           y2={height - verticalPadding}
         />
-        {benchmarkSeconds !== undefined && (
-          <>
-            <line
-              className="progression-benchmark"
-              x1={horizontalPadding}
-              x2={width - horizontalPadding}
-              y1={y(benchmarkSeconds)}
-              y2={y(benchmarkSeconds)}
-            />
-            <text
-              className="progression-benchmark-label"
-              x={width - horizontalPadding}
-              y={y(benchmarkSeconds) - 6}
-              textAnchor="end"
-            >
-              Benchmark {formatSeconds(benchmarkSeconds)}
-            </text>
-          </>
-        )}
         <polyline className="progression-line" points={coordinates} />
         {progression.points.map((point, index) => (
           <g key={point.resultId}>
@@ -353,6 +330,148 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         ) : (
           <p>No performance results recorded.</p>
         )}
+      </section>
+
+      <section className="performance-section performance-insight">
+        <h3>Performance Highlight</h3>
+        {progression?.distributionHighlight ? (
+          <p className="performance-highlight">
+            {progression.distributionHighlight}
+          </p>
+        ) : (
+          <p>Expected split distribution is unavailable for this result.</p>
+        )}
+        {progression?.recurringPattern ? (
+          <p className="recurring-pattern">{progression.recurringPattern}</p>
+        ) : progression && progression.points.length >= 2 ? (
+          <p>No repeated distribution pattern established yet.</p>
+        ) : (
+          <p>More comparable performances are needed to identify recurrence.</p>
+        )}
+
+        {selectedResult && comparison ? (
+          <>
+            <dl className="comparison-summary performance-context">
+              <div>
+                <dt>Result</dt>
+                <dd>{formatSeconds(selectedResult.totalSeconds)}</dd>
+              </div>
+              <div>
+                <dt>From PB</dt>
+                <dd>{formatDifference(comparison.pbTotalDifferenceSeconds)}</dd>
+              </div>
+              <div>
+                <dt>From previous</dt>
+                <dd>
+                  {formatDifference(comparison.previousTotalDifferenceSeconds)}
+                </dd>
+              </div>
+              <div>
+                <dt>Comparable races</dt>
+                <dd>{progression?.points.length ?? 0}</dd>
+              </div>
+            </dl>
+
+            {comparison.distributionSummary && (
+              <dl className="comparison-summary distribution-summary">
+                <div>
+                  <dt>First half actual / expected</dt>
+                  <dd>
+                    {formatSeconds(
+                      comparison.distributionSummary.firstHalfActualSeconds,
+                    )}{' '}
+                    /{' '}
+                    {formatSeconds(
+                      comparison.distributionSummary.firstHalfExpectedSeconds,
+                    )}
+                  </dd>
+                  <span>
+                    {formatDifference(
+                      comparison.distributionSummary.firstHalfDifferenceSeconds,
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <dt>Second half actual / expected</dt>
+                  <dd>
+                    {formatSeconds(
+                      comparison.distributionSummary.secondHalfActualSeconds,
+                    )}{' '}
+                    /{' '}
+                    {formatSeconds(
+                      comparison.distributionSummary.secondHalfExpectedSeconds,
+                    )}
+                  </dd>
+                  <span>
+                    {formatDifference(
+                      comparison.distributionSummary.secondHalfDifferenceSeconds,
+                    )}
+                  </span>
+                </div>
+              </dl>
+            )}
+
+            {selectedResult.segments.length ? (
+              <div className="comparison-table-wrap">
+                <table className="comparison-table">
+                  <thead>
+                    <tr>
+                      <th>Segment</th>
+                      <th>Actual</th>
+                      <th>Expected distribution</th>
+                      <th>Difference</th>
+                      <th>Previous</th>
+                      <th>From previous</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparison.segmentComparisons.map((segment) => (
+                      <tr key={segment.segmentIndex}>
+                        <td>{segment.distanceFrom}–{segment.distanceTo} m</td>
+                        <td>{formatSeconds(segment.actualSeconds)}</td>
+                        <td>{formatSeconds(segment.benchmarkSeconds)}</td>
+                        <td>
+                          {formatDifference(segment.benchmarkDifferenceSeconds)}
+                        </td>
+                        <td>{formatSeconds(segment.previousSeconds)}</td>
+                        <td>
+                          {formatDifference(segment.previousDifferenceSeconds)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p>Split data unavailable for this result.</p>
+            )}
+
+            <details className="benchmark-provenance">
+              <summary>Benchmark method and provenance</summary>
+              {comparison.benchmarkProvenance ? (
+                <div>
+                  <p>
+                    <strong>{comparison.benchmarkProvenance.label}</strong>
+                  </p>
+                  {comparison.benchmarkProvenance.isOutsidePublishedRange && (
+                    <p>
+                      Outside the original published range. This is an
+                      able-bodied pacing model, not a classification-specific
+                      Para benchmark.
+                    </p>
+                  )}
+                  <p>
+                    Source: {comparison.benchmarkProvenance.source} (
+                    {comparison.benchmarkProvenance.sourceVersion}).{' '}
+                    {comparison.benchmarkProvenance.basis}.
+                  </p>
+                </div>
+              ) : (
+                <p>No applicable benchmark available.</p>
+              )}
+            </details>
+          </>
+        ) : null}
       </section>
 
       <section className="performance-section">
@@ -588,7 +707,6 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
                     <th>Total</th>
                     <th>From previous</th>
                     <th>From PB</th>
-                    <th>From benchmark</th>
                     <th>Result</th>
                   </tr>
                 </thead>
@@ -602,9 +720,6 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
                       <td>{formatSeconds(point.totalSeconds)}</td>
                       <td>{formatDifference(point.previousDifferenceSeconds)}</td>
                       <td>{formatDifference(point.pbDifferenceSeconds)}</td>
-                      <td>
-                        {formatDifference(point.benchmarkDifferenceSeconds)}
-                      </td>
                       <td>
                         <button
                           className="secondary-button"
@@ -631,131 +746,6 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
         )}
       </section>
 
-      <section className="performance-section">
-        <h3>Comparison Summary</h3>
-        {selectedResult && comparison ? (
-          <dl className="comparison-summary">
-            <div>
-              <dt>Result total</dt>
-              <dd>{formatSeconds(selectedResult.totalSeconds)}</dd>
-            </div>
-            <div>
-              <dt>From previous</dt>
-              <dd>
-                {formatDifference(comparison.previousTotalDifferenceSeconds)}
-              </dd>
-            </div>
-            <div>
-              <dt>From PB</dt>
-              <dd>{formatDifference(comparison.pbTotalDifferenceSeconds)}</dd>
-            </div>
-            <div>
-              <dt>Benchmark</dt>
-              <dd>
-                {comparison.benchmarkProvenance?.label ??
-                  comparison.benchmarkMatchStatus}
-              </dd>
-            </div>
-            <div>
-              <dt>From benchmark</dt>
-              <dd>{formatDifference(comparison.benchmarkTotalDifferenceSeconds)}</dd>
-            </div>
-            <div>
-              <dt>Largest segment deviation</dt>
-              <dd>
-                {comparison.largestPositiveSegmentDeviation
-                  ? `${comparison.largestPositiveSegmentDeviation.distanceFrom}–${comparison.largestPositiveSegmentDeviation.distanceTo} m`
-                  : 'Not available'}
-              </dd>
-            </div>
-          </dl>
-        ) : (
-          <p>Add a performance result to generate a comparison.</p>
-        )}
-        {comparison?.benchmarkMatchStatus === 'unavailable' && (
-          <p>No applicable QAS benchmark available.</p>
-        )}
-        {comparison?.benchmarkMatchStatus === 'out-of-range' && (
-          <p>Result is outside the published QAS pacing-chart range.</p>
-        )}
-        {comparison?.benchmarkProvenance?.isOutsidePublishedRange && (
-          <p>
-            Result is outside the original published range. This comparison
-            uses a validated able-bodied pacing model, not a published value or
-            a classification-specific Para benchmark.
-          </p>
-        )}
-        {comparison?.benchmarkProvenance && (
-          <p>
-            Source: {comparison.benchmarkProvenance.source} (
-            {comparison.benchmarkProvenance.sourceVersion}).{' '}
-            {comparison.benchmarkProvenance.basis}.
-          </p>
-        )}
-      </section>
-
-      <section className="performance-section">
-        <h3>Segment Comparison</h3>
-        {comparison && selectedResult?.segments.length ? (
-          <div className="comparison-table-wrap">
-            <table className="comparison-table">
-              <thead>
-                <tr>
-                  <th>Segment</th>
-                  <th>Actual</th>
-                  <th>Previous</th>
-                  <th>Difference</th>
-                  <th>{comparison.benchmarkProvenance?.label ?? 'Benchmark'}</th>
-                  <th>Difference</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparison.segmentComparisons.map((segment) => (
-                  <tr key={segment.segmentIndex}>
-                    <td>{segment.distanceFrom}–{segment.distanceTo} m</td>
-                    <td>{formatSeconds(segment.actualSeconds)}</td>
-                    <td>{formatSeconds(segment.previousSeconds)}</td>
-                    <td>
-                      {formatDifference(segment.previousDifferenceSeconds)}
-                    </td>
-                    <td>{formatSeconds(segment.benchmarkSeconds)}</td>
-                    <td>
-                      {formatDifference(segment.benchmarkDifferenceSeconds)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : selectedResult ? (
-          <p>Split data unavailable for this result.</p>
-        ) : (
-          <p>No segment comparison available.</p>
-        )}
-        {comparison && !comparison.previousResultId && (
-          <p>No previous comparable result.</p>
-        )}
-        {comparison &&
-          selectedResult?.segments.length > 0 &&
-          comparison.pbResultId === undefined && (
-          <p>PB split profile unavailable; PB comparison is total-time only when recorded.</p>
-        )}
-      </section>
-
-      <section className="performance-section">
-        <h3>Concise Findings</h3>
-        {comparison?.findings.length ? (
-          <ul className="performance-findings">
-            {comparison.findings.map((finding) => (
-              <li key={`${finding.comparisonType}-${finding.metricOrSegment}`}>
-                {finding.summary}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>No factual comparison findings available.</p>
-        )}
-      </section>
     </Card>
   )
 }

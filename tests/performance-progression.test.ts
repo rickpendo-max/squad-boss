@@ -92,7 +92,7 @@ test('filters the selected event group and orders it chronologically', () => {
   assert.equal(progression.points[1].isSelected, false)
 })
 
-test('identifies PB and carries previous and benchmark deltas', () => {
+test('identifies PB and carries previous context without a benchmark-total metric', () => {
   const older = result('older', '2026-01-01T00:00:00Z', 58)
   const selected = result('selected', '2026-02-01T00:00:00Z', 56)
   const progression = calculatePerformanceProgression(
@@ -104,8 +104,6 @@ test('identifies PB and carries previous and benchmark deltas', () => {
         previousTotalDifferenceSeconds: -2,
         pbResultId: selected.id,
         pbTotalDifferenceSeconds: 0,
-        benchmarkMatchStatus: 'exact',
-        benchmarkTotalDifferenceSeconds: 1.5,
       }),
     ),
   )
@@ -113,8 +111,7 @@ test('identifies PB and carries previous and benchmark deltas', () => {
   assert.equal(progression.points[1].isPb, true)
   assert.equal(progression.points[1].previousDifferenceSeconds, -2)
   assert.equal(progression.points[1].pbDifferenceSeconds, 0)
-  assert.equal(progression.points[1].benchmarkDifferenceSeconds, 1.5)
-  assert.equal(progression.points[1].benchmarkSeconds, 54.5)
+  assert.equal('benchmarkDifferenceSeconds' in progression.points[1], false)
 })
 
 test('omits benchmark values when no applicable benchmark exists', () => {
@@ -125,8 +122,7 @@ test('omits benchmark values when no applicable benchmark exists', () => {
     comparisonMap(comparison(selected.id)),
   )
 
-  assert.equal(progression.points[0].benchmarkDifferenceSeconds, undefined)
-  assert.equal(progression.points[0].benchmarkSeconds, undefined)
+  assert.equal('benchmarkDifferenceSeconds' in progression.points[0], false)
 })
 
 test('reports insufficient history for one comparable result', () => {
@@ -222,7 +218,7 @@ test('distinguishes flat and deteriorating recent sequences', () => {
   assert.match(deteriorating.findings.join(' '), /Slower across/)
 })
 
-test('highlights a repeated back-half fade from comparable split evidence', () => {
+test('highlights a recurring back-end difference from benchmark distribution', () => {
   const results = [
     result('one', '2026-01-01T00:00:00Z', 57),
     result('two', '2026-02-01T00:00:00Z', 58),
@@ -232,11 +228,34 @@ test('highlights a repeated back-half fade from comparable split evidence', () =
   const progression = calculatePerformanceProgression(
     results[2],
     results,
-    comparisonMap(...results.map((item) => comparison(item.id))),
+    comparisonMap(
+      ...results.map((item) =>
+        comparison(item.id, {
+          distributionSummary: {
+            firstHalfActualSeconds: 27,
+            firstHalfExpectedSeconds: 28,
+            firstHalfDifferenceSeconds: -1,
+            secondHalfActualSeconds: item.totalSeconds - 27,
+            secondHalfExpectedSeconds: item.totalSeconds - 28,
+            secondHalfDifferenceSeconds: 1,
+          },
+          largestAbsoluteSegmentDeviation: {
+            segmentIndex: 2,
+            distanceFrom: 50,
+            distanceTo: 100,
+            actualSeconds: item.totalSeconds - 27,
+            actualPercentageOfTotal: 50,
+            benchmarkSeconds: item.totalSeconds - 28,
+            benchmarkDifferenceSeconds: 1,
+          },
+        }),
+      ),
+    ),
   )
 
-  assert.match(progression.findings[0], /Repeated back-half fade/)
-  assert.match(progression.findings[0], /3 of the last 3/)
+  assert.match(progression.distributionHighlight!, /Back end was the main difference/)
+  assert.match(progression.distributionHighlight!, /largest segment difference was 50–100 m/)
+  assert.match(progression.recurringPattern!, /3 of the last 3/)
 })
 
 test('does not infer a back-half fade from final-time-only results', () => {
@@ -252,7 +271,7 @@ test('does not infer a back-half fade from final-time-only results', () => {
     comparisonMap(...results.map((item) => comparison(item.id))),
   )
 
-  assert.doesNotMatch(progression.findings.join(' '), /back-half fade/)
+  assert.equal(progression.recurringPattern, undefined)
 })
 
 test('isolates PB, previous, progression and benchmarks by course', () => {

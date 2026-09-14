@@ -180,9 +180,18 @@ export interface PerformanceComparison {
   previousTotalDifferenceSeconds?: number
   pbTotalDifferenceSeconds?: number
   benchmarkTotalDifferenceSeconds?: number
+  distributionSummary?: {
+    firstHalfActualSeconds: number
+    firstHalfExpectedSeconds: number
+    firstHalfDifferenceSeconds: number
+    secondHalfActualSeconds: number
+    secondHalfExpectedSeconds: number
+    secondHalfDifferenceSeconds: number
+  }
   segmentComparisons: PerformanceSegmentComparison[]
   benchmarkMatchStatus: BenchmarkMatchStatus
   largestPositiveSegmentDeviation?: PerformanceSegmentComparison
+  largestAbsoluteSegmentDeviation?: PerformanceSegmentComparison
   largestImprovementFromPrevious?: PerformanceSegmentComparison
   largestDeteriorationFromPrevious?: PerformanceSegmentComparison
   findings: PerformanceFinding[]

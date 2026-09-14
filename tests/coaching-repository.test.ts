@@ -1352,6 +1352,15 @@ test('matches Maddie to the authoritative female 200 LCM freestyle row', () => {
     ),
     [0.31, 0.01, -0.07, -0.25],
   )
+  assert.deepEqual(comparison.distributionSummary, {
+    firstHalfActualSeconds: 61,
+    firstHalfExpectedSeconds: 60.68,
+    firstHalfDifferenceSeconds: 0.32,
+    secondHalfActualSeconds: 63.5,
+    secondHalfExpectedSeconds: 63.82,
+    secondHalfDifferenceSeconds: -0.32,
+  })
+  assert.equal(comparison.largestAbsoluteSegmentDeviation?.distanceFrom, 0)
 })
 
 test('retains the published male and female 200 freestyle chart ranges', () => {

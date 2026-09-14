@@ -345,6 +345,64 @@ export function calculatePerformanceComparison(
         left.previousDifferenceSeconds ??
         0),
   )[0]
+  const largestAbsoluteSegmentDeviation = byBenchmarkDifference.toSorted(
+    (left, right) =>
+      Math.abs(right.benchmarkDifferenceSeconds!) -
+      Math.abs(left.benchmarkDifferenceSeconds!),
+  )[0]
+  const halfway = segmentComparisons.length / 2
+  const canCompareHalves =
+    benchmarkSegmentsCompatible &&
+    segmentComparisons.length >= 2 &&
+    Number.isInteger(halfway)
+  const distributionSummary = canCompareHalves
+    ? {
+        firstHalfActualSeconds: round(
+          segmentComparisons
+            .slice(0, halfway)
+            .reduce((total, segment) => total + segment.actualSeconds, 0),
+        ),
+        firstHalfExpectedSeconds: round(
+          segmentComparisons
+            .slice(0, halfway)
+            .reduce(
+              (total, segment) => total + segment.benchmarkSeconds!,
+              0,
+            ),
+        ),
+        firstHalfDifferenceSeconds: round(
+          segmentComparisons
+            .slice(0, halfway)
+            .reduce(
+              (total, segment) =>
+                total + segment.benchmarkDifferenceSeconds!,
+              0,
+            ),
+        ),
+        secondHalfActualSeconds: round(
+          segmentComparisons
+            .slice(halfway)
+            .reduce((total, segment) => total + segment.actualSeconds, 0),
+        ),
+        secondHalfExpectedSeconds: round(
+          segmentComparisons
+            .slice(halfway)
+            .reduce(
+              (total, segment) => total + segment.benchmarkSeconds!,
+              0,
+            ),
+        ),
+        secondHalfDifferenceSeconds: round(
+          segmentComparisons
+            .slice(halfway)
+            .reduce(
+              (total, segment) =>
+                total + segment.benchmarkDifferenceSeconds!,
+              0,
+            ),
+        ),
+      }
+    : undefined
 
   const previousTotalDifferenceSeconds = previous
     ? round(result.totalSeconds - previous.totalSeconds)
@@ -466,9 +524,11 @@ export function calculatePerformanceComparison(
     previousTotalDifferenceSeconds,
     pbTotalDifferenceSeconds,
     benchmarkTotalDifferenceSeconds,
+    distributionSummary,
     segmentComparisons,
     benchmarkMatchStatus,
     largestPositiveSegmentDeviation,
+    largestAbsoluteSegmentDeviation,
     largestImprovementFromPrevious,
     largestDeteriorationFromPrevious,
     findings: findings.slice(0, 3),
