@@ -86,8 +86,48 @@ export interface BenchmarkProfile {
   source?: string
   sourceVersion?: string
   isPublished?: boolean
+  sampleSize?: number
+  evidenceIds?: string[]
+  sourceUrl?: string
   basis: string
   segments: BenchmarkSegment[]
+}
+
+export type PerformanceMedal = 'gold' | 'silver' | 'bronze'
+
+export interface BenchmarkEvidenceSplit {
+  distance: number
+  cumulativeTime: string
+  cumulativeSeconds: number
+  segmentTime: string
+  segmentSeconds: number
+}
+
+export interface ParaBenchmarkSourcePerformance {
+  id: string
+  competition: string
+  competitionDate: string
+  round: string
+  placing: number
+  medal?: PerformanceMedal
+  athleteName: string
+  nation: string
+  sex: 'female' | 'male'
+  classification: string
+  event: string
+  distance: number
+  stroke: SwimmingStroke
+  course: PerformanceCourse
+  result: string
+  totalSeconds: number
+  splits: BenchmarkEvidenceSplit[]
+  provenance: {
+    sourceTitle: string
+    sourceUrl: string
+    reportCode: string
+    reportVersion: string
+    retrievedAt: string
+  }
 }
 
 export type BenchmarkModelCategory =
@@ -139,6 +179,9 @@ export interface BenchmarkProvenance {
   modelCategory: BenchmarkModelCategory
   isPublished: boolean
   isOutsidePublishedRange: boolean
+  sampleSize?: number
+  sourceUrl?: string
+  evidenceIds?: string[]
   publishedRange?: {
     minimumTotalSeconds: number
     maximumTotalSeconds: number

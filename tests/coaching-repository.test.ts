@@ -5,6 +5,11 @@ import { getInitialAthlete } from '../src/context/athlete-selection.ts'
 import { athletes } from '../src/data/athletes.ts'
 import { calculateSplitTotal } from '../src/domain/performance-entry.ts'
 import {
+  filterPerformanceResults,
+  getPerformanceEventOptions,
+  performanceEventKey,
+} from '../src/domain/performance-selection.ts'
+import {
   InMemoryCoachingRepository,
   coachingRepository,
 } from '../src/repositories/in-memory-coaching-repository.ts'
@@ -25,6 +30,10 @@ import {
   qasPacingBenchmarkSet,
   qasPacingDerivedModels,
 } from '../src/data/benchmarks/qas-pacing-benchmarks.ts'
+import {
+  paraMajorEventBenchmarkProfiles,
+  paraMajorEventSourcePerformances,
+} from '../src/data/benchmarks/para-major-event-benchmarks.ts'
 
 const [sam, maddie] = athletes
 
@@ -1567,5 +1576,208 @@ test('prefers a valid classification-specific Para population benchmark', () => 
   assert.equal(
     comparison.benchmarkProvenance?.modelCategory,
     'classification-para',
+  )
+})
+
+test('retains the complete Paris 2024 Women S14 final as benchmark evidence', () => {
+  assert.equal(paraMajorEventSourcePerformances.length, 8)
+  assert.deepEqual(
+    paraMajorEventSourcePerformances.map(
+      ({ placing, medal, result, classification, sex }) => ({
+        placing,
+        medal,
+        result,
+        classification,
+        sex,
+      }),
+    ),
+    [
+      { placing: 1, medal: 'gold', result: '2:05.10', classification: 'S14', sex: 'female' },
+      { placing: 2, medal: 'silver', result: '2:07.16', classification: 'S14', sex: 'female' },
+      { placing: 3, medal: 'bronze', result: '2:07.91', classification: 'S14', sex: 'female' },
+      { placing: 4, medal: undefined, result: '2:08.41', classification: 'S14', sex: 'female' },
+      { placing: 5, medal: undefined, result: '2:12.48', classification: 'S14', sex: 'female' },
+      { placing: 6, medal: undefined, result: '2:12.84', classification: 'S14', sex: 'female' },
+      { placing: 7, medal: undefined, result: '2:13.13', classification: 'S14', sex: 'female' },
+      { placing: 8, medal: undefined, result: '2:14.31', classification: 'S14', sex: 'female' },
+    ],
+  )
+  assert.deepEqual(
+    paraMajorEventSourcePerformances[4].splits.map(
+      ({ cumulativeTime, segmentTime }) => ({ cumulativeTime, segmentTime }),
+    ),
+    [
+      { cumulativeTime: '30.64', segmentTime: '30.64' },
+      { cumulativeTime: '1:04.01', segmentTime: '33.37' },
+      { cumulativeTime: '1:38.37', segmentTime: '34.36' },
+      { cumulativeTime: '2:12.48', segmentTime: '34.11' },
+    ],
+  )
+})
+
+test('derives a deterministic median distribution from all eight finalists', () => {
+  const [profile] = paraMajorEventBenchmarkProfiles
+
+  assert.equal(profile.sampleSize, 8)
+  assert.equal(profile.evidenceIds?.length, 8)
+  assert.equal(profile.modelCategory, 'classification-para')
+  assert.equal(
+    profile.segments.reduce(
+      (total, segment) => total + segment.expectedPercentageOfTotal!,
+      0,
+    ),
+    100,
+  )
+  assert.deepEqual(
+    profile.segments.map((segment) =>
+      Number(segment.expectedPercentageOfTotal!.toFixed(6)),
+    ),
+    [23.169826, 25.224328, 25.866523, 25.739322],
+  )
+})
+
+test('uses the classification benchmark for Maddie and retains SpeedChart fallback', () => {
+  const performance = {
+    ...performanceResult,
+    id: 'maddie-s14-major-event-comparison',
+    athleteId: maddie.id,
+    event: '200 m freestyle',
+    distance: 200,
+    totalSeconds: 137.4,
+    segments: [
+      { segmentIndex: 1, distanceFrom: 0, distanceTo: 50, seconds: 31.7 },
+      { segmentIndex: 2, distanceFrom: 50, distanceTo: 100, seconds: 34.63 },
+      { segmentIndex: 3, distanceFrom: 100, distanceTo: 150, seconds: 35.69 },
+      { segmentIndex: 4, distanceFrom: 150, distanceTo: 200, seconds: 35.38 },
+    ],
+  }
+  const profiles = [
+    ...qasPacingBenchmarkProfiles,
+    ...paraMajorEventBenchmarkProfiles,
+  ]
+  const comparison = createPerformanceRepository(
+    [performance],
+    profiles,
+    qasPacingDerivedModels,
+  ).getPerformanceComparison(performance.id)
+
+  assert.equal(
+    comparison.benchmarkProfileId,
+    paraMajorEventBenchmarkProfiles[0].id,
+  )
+  assert.equal(
+    comparison.benchmarkProvenance?.modelCategory,
+    'classification-para',
+  )
+  assert.equal(comparison.benchmarkProvenance?.sampleSize, 8)
+  assert.deepEqual(
+    comparison.segmentComparisons.map(({ benchmarkSeconds }) => benchmarkSeconds),
+    [31.84, 34.66, 35.54, 35.36],
+  )
+
+  const fallback = createPerformanceRepository(
+    [performance],
+    qasPacingBenchmarkProfiles,
+    qasPacingDerivedModels,
+  ).getPerformanceComparison(performance.id)
+  assert.equal(fallback.benchmarkMatchStatus, 'derived')
+  assert.equal(
+    fallback.benchmarkProvenance?.modelCategory,
+    'population-able-bodied',
+  )
+})
+
+test('keeps the S14 benchmark selected when an imported Maddie result has no splits', () => {
+  const athlete = { ...maddie, classification: 'S14' }
+  const finalOnly = {
+    ...performanceResult,
+    id: 'maddie-final-only-s14-200-free',
+    athleteId: athlete.id,
+    event: '200 m freestyle',
+    distance: 200,
+    stroke: 'freestyle' as const,
+    course: 'LCM' as const,
+    totalSeconds: 137.4,
+    segments: [],
+    source: 'import' as const,
+    importMetadata: {
+      provider: 'Swimming Australia CSV' as const,
+      sourceType: 'csv' as const,
+      sourceFileName: 'maddie-results.csv',
+      meetName: 'Acceptance Test Meet',
+      duplicateKey: 'maddie-final-only-s14-200-free',
+      importedAt: '2026-09-14T00:00:00Z',
+    },
+  }
+  const repository = new InMemoryCoachingRepository(
+    {
+      athletes: [athlete],
+      observations: [],
+      interpretations: [],
+      priorities: [],
+      decisions: [],
+      performanceResults: [finalOnly],
+      benchmarkProfiles: [
+        ...qasPacingBenchmarkProfiles,
+        ...paraMajorEventBenchmarkProfiles,
+      ],
+      derivedBenchmarkModels: qasPacingDerivedModels,
+    },
+    { createId: () => 'unused', now: () => '2026-09-14T00:00:00Z' },
+  )
+
+  const comparison = repository.getPerformanceComparison(finalOnly.id)
+
+  assert.equal(comparison.benchmarkMatchStatus, 'partial')
+  assert.equal(
+    comparison.benchmarkProfileId,
+    paraMajorEventBenchmarkProfiles[0].id,
+  )
+  assert.equal(
+    comparison.benchmarkProvenance?.label,
+    'Women S14 major-event pacing benchmark',
+  )
+  assert.equal(comparison.benchmarkProvenance?.sampleSize, 8)
+  assert.equal(comparison.segmentComparisons.length, 0)
+  assert.equal(comparison.distributionSummary, undefined)
+  assert.doesNotMatch(
+    comparison.findings.map(({ summary }) => summary).join(' '),
+    /No applicable benchmark/,
+  )
+})
+
+test('filters a large performance history by event and course', () => {
+  const bulkResults: PerformanceResult[] = Array.from(
+    { length: 340 },
+    (_, index) => ({
+      ...performanceResult,
+      id: `bulk-100-free-${index}`,
+      athleteId: maddie.id,
+      occurredAt: new Date(Date.UTC(2025, 0, 1 + index)).toISOString(),
+    }),
+  )
+  const targetResults: PerformanceResult[] = [
+    { ...performanceResult, id: 'target-lcm-new', athleteId: maddie.id, event: '200 m freestyle', distance: 200, course: 'LCM', occurredAt: '2026-09-01T00:00:00Z' },
+    { ...performanceResult, id: 'target-lcm-old', athleteId: maddie.id, event: '200 m freestyle', distance: 200, course: 'LCM', occurredAt: '2026-08-01T00:00:00Z' },
+    { ...performanceResult, id: 'target-scm', athleteId: maddie.id, event: '200 m freestyle', distance: 200, course: 'SCM', occurredAt: '2026-07-01T00:00:00Z' },
+    { ...performanceResult, id: 'other-back', athleteId: maddie.id, event: '200 m backstroke', distance: 200, stroke: 'backstroke', course: 'LCM' },
+    { ...performanceResult, id: 'other-fly', athleteId: maddie.id, event: '100 m butterfly', stroke: 'butterfly', course: 'LCM' },
+  ]
+  const results = [...targetResults, ...bulkResults].toSorted((left, right) =>
+    right.occurredAt.localeCompare(left.occurredAt),
+  )
+  const targetKey = performanceEventKey(targetResults[0])
+
+  assert.equal(results.length, 345)
+  assert.deepEqual(
+    filterPerformanceResults(results, targetKey, 'LCM').map(({ id }) => id),
+    ['target-lcm-new', 'target-lcm-old'],
+  )
+  assert.equal(filterPerformanceResults(results, targetKey, 'SCM')[0].id, 'target-scm')
+  assert.equal(
+    getPerformanceEventOptions(results).filter(
+      ({ value }) => value === targetKey,
+    ).length,
+    1,
   )
 })

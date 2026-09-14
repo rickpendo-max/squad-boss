@@ -10,6 +10,7 @@ import {
   qasPacingBenchmarkProfiles,
   qasPacingDerivedModels,
 } from '../data/benchmarks/qas-pacing-benchmarks.ts'
+import { paraMajorEventBenchmarkProfiles } from '../data/benchmarks/para-major-event-benchmarks.ts'
 import { calculatePerformanceComparison } from '../domain/performance-comparison.ts'
 import { priorityCategories } from '../types/coaching/priority.ts'
 import type { Athlete } from '../types/athlete'
@@ -741,7 +742,10 @@ const seedCoachingData: InMemoryCoachingData = {
   priorities,
   decisions,
   performanceResults,
-  benchmarkProfiles: qasPacingBenchmarkProfiles,
+  benchmarkProfiles: [
+    ...qasPacingBenchmarkProfiles,
+    ...paraMajorEventBenchmarkProfiles,
+  ],
   derivedBenchmarkModels: qasPacingDerivedModels,
 }
 

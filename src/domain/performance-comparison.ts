@@ -137,6 +137,36 @@ function createDerivedProfile(
   }
 }
 
+function materializePercentageProfile(
+  profile: BenchmarkProfile,
+  totalSeconds: number,
+): BenchmarkProfile {
+  if (
+    profile.segments.length === 0 ||
+    !profile.segments.every(
+      (segment) => segment.expectedPercentageOfTotal !== undefined,
+    )
+  ) {
+    return profile
+  }
+
+  let allocatedSeconds = 0
+  return {
+    ...profile,
+    segments: profile.segments.map((segment, index) => {
+      const expectedSeconds =
+        index === profile.segments.length - 1
+          ? round(totalSeconds - allocatedSeconds)
+          : round(
+              totalSeconds * (segment.expectedPercentageOfTotal! / 100),
+            )
+      allocatedSeconds += expectedSeconds
+
+      return { ...segment, expectedSeconds }
+    }),
+  }
+}
+
 export function calculatePerformanceComparison(
   result: PerformanceResult,
   allResults: PerformanceResult[],
@@ -223,7 +253,7 @@ export function calculatePerformanceComparison(
     selectedDerivedModel
       ? createDerivedProfile(selectedDerivedModel, result.totalSeconds)
       : undefined
-  const benchmark = targetTimedProfiles.length
+  const selectedBenchmark = targetTimedProfiles.length
     ? resultWithinPublishedRange
       ? targetTimedProfiles.toSorted(
           (left, right) =>
@@ -232,6 +262,9 @@ export function calculatePerformanceComparison(
         )[0]
       : derivedBenchmark
     : selectedProfiles[0]
+  const benchmark = selectedBenchmark
+    ? materializePercentageProfile(selectedBenchmark, result.totalSeconds)
+    : undefined
   const benchmarkProvenance: BenchmarkProvenance | undefined = benchmark
     ? {
         label: benchmark.label ?? 'Benchmark',
@@ -242,6 +275,9 @@ export function calculatePerformanceComparison(
           benchmark.modelCategory ?? 'population-able-bodied',
         isPublished: benchmark.isPublished === true,
         isOutsidePublishedRange: derivedBenchmark !== undefined,
+        sampleSize: benchmark.sampleSize,
+        sourceUrl: benchmark.sourceUrl,
+        evidenceIds: benchmark.evidenceIds,
         publishedRange: selectedDerivedModel?.publishedRange,
       }
     : undefined
@@ -454,9 +490,7 @@ export function calculatePerformanceComparison(
       summary: differenceSummary(
         segmentLabel(largestPositiveSegmentDeviation),
         largestPositiveSegmentDeviation.benchmarkDifferenceSeconds,
-        benchmarkProvenance?.isPublished
-          ? 'the published SpeedChart benchmark'
-          : 'the SpeedChart-derived able-bodied model',
+        benchmarkProvenance?.label ?? 'the benchmark distribution',
       ),
     })
   }

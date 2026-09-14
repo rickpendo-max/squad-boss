@@ -768,6 +768,47 @@ progress::-moz-progress-bar {
   font-weight: 800;
 }
 
+.performance-finder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.performance-finder h3 {
+  margin: 0;
+}
+
+.performance-finder-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.performance-finder-controls label {
+  display: grid;
+  gap: 4px;
+  color: #516176;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.performance-finder-controls select {
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid #cbd6e2;
+  border-radius: 8px;
+  color: #24364b;
+  background: white;
+  font: inherit;
+  font-size: 0.9rem;
+  text-transform: none;
+}
+
 .performance-history-list {
   display: grid;
   gap: 6px;

@@ -7,6 +7,13 @@ import {
   calculatePerformanceProgression,
   type PerformanceProgression,
 } from '../../domain/performance-progression'
+import {
+  ALL_PERFORMANCE_EVENTS,
+  filterPerformanceResults,
+  getPerformanceEventOptions,
+  performanceEventKey,
+  type PerformanceCourseFilter,
+} from '../../domain/performance-selection'
 import { coachingRepository } from '../../repositories/in-memory-coaching-repository'
 import type {
   PerformanceComparison,
@@ -311,6 +318,12 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
   const [error, setError] = useState('')
   const [editingResultId, setEditingResultId] = useState<string>()
   const [selectedResultId, setSelectedResultId] = useState<string>()
+  const [eventFilter, setEventFilter] = useState(
+    results[0] ? performanceEventKey(results[0]) : ALL_PERFORMANCE_EVENTS,
+  )
+  const [courseFilter, setCourseFilter] = useState<PerformanceCourseFilter>(
+    results[0]?.course ?? 'all',
+  )
   const editSectionRef = useRef<HTMLElement>(null)
   const enteredFinalTotal = Number(form.finalTotalSeconds)
   const calculatedTotal = form.splitSeconds.length
@@ -322,6 +335,12 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
       : undefined
   const selectedResult =
     results.find((result) => result.id === selectedResultId) ?? results[0]
+  const eventOptions = getPerformanceEventOptions(results)
+  const filteredResults = filterPerformanceResults(
+    results,
+    eventFilter,
+    courseFilter,
+  )
   const comparison = selectedResult
     ? coachingRepository.getPerformanceComparison(selectedResult.id)
     : undefined
@@ -399,6 +418,31 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
     setForm(initialForm())
     setEditingResultId(undefined)
     setError('')
+  }
+
+  function selectEventFilter(nextEvent: string) {
+    const courseResults = filterPerformanceResults(
+      results,
+      nextEvent,
+      courseFilter,
+    )
+    const nextCourse = courseResults.length ? courseFilter : 'all'
+    const nextResults = filterPerformanceResults(results, nextEvent, nextCourse)
+
+    setEventFilter(nextEvent)
+    setCourseFilter(nextCourse)
+    if (nextResults[0]) selectResult(nextResults[0].id)
+  }
+
+  function selectCourseFilter(nextCourse: PerformanceCourseFilter) {
+    const nextResults = filterPerformanceResults(
+      results,
+      eventFilter,
+      nextCourse,
+    )
+
+    setCourseFilter(nextCourse)
+    if (nextResults[0]) selectResult(nextResults[0].id)
   }
 
   function cancelEditing() {
@@ -643,6 +687,9 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
                         Source: {comparison.benchmarkProvenance.source} (
                         {comparison.benchmarkProvenance.sourceVersion}).{' '}
                         {comparison.benchmarkProvenance.basis}.
+                        {comparison.benchmarkProvenance.sourceUrl && (
+                          <>{' '}<a href={comparison.benchmarkProvenance.sourceUrl} target="_blank" rel="noreferrer">View source report</a>.</>
+                        )}
                       </p>
                     </>
                   ) : (
@@ -658,11 +705,47 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
       </section>
 
       <section className="performance-section">
+        <div className="performance-finder">
+          <h3>Find Performance</h3>
+          <div className="performance-finder-controls">
+            <label>
+              Event
+              <select
+                value={eventFilter}
+                onChange={(event) => selectEventFilter(event.target.value)}
+              >
+                <option value={ALL_PERFORMANCE_EVENTS}>All events</option>
+                {eventOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Course
+              <select
+                value={courseFilter}
+                onChange={(event) =>
+                  selectCourseFilter(
+                    event.target.value as PerformanceCourseFilter,
+                  )
+                }
+              >
+                <option value="all">All courses</option>
+                <option value="LCM">LCM</option>
+                <option value="SCM">SCM</option>
+              </select>
+            </label>
+          </div>
+        </div>
         <details className="performance-history">
-          <summary>Performance History ({results.length})</summary>
-          {results.length ? (
+          <summary>
+            Performance History ({filteredResults.length} of {results.length})
+          </summary>
+          {filteredResults.length ? (
             <div className="performance-history-list">
-              {results.map((result) => {
+              {filteredResults.map((result) => {
                 const isSelected = result.id === selectedResult?.id
 
                 return (
@@ -689,7 +772,7 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
               })}
             </div>
           ) : (
-            <p>No performance results recorded.</p>
+            <p>No performances match this event and course.</p>
           )}
         </details>
       </section>
