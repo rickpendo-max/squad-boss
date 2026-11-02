@@ -1,5 +1,8 @@
 import Ajv from 'ajv'
-import { ripeArchiveSchema } from './ripe-archive-schema.ts'
+import {
+  ripeArchiveSchema,
+  archivePerformanceSchema,
+} from './ripe-archive-schema.ts'
 import type {
   ArchiveState,
   ImportReviewRow,
@@ -34,6 +37,17 @@ ajv.addFormat('date-time', {
   },
 })
 const validate = ajv.compile<VerifiedArchiveExport>(ripeArchiveSchema)
+const validatePerformance = ajv.compile<
+  import('../types/archive').ArchivePerformance
+>(archivePerformanceSchema)
+
+export function parseArchivePerformance(value: unknown) {
+  if (!validatePerformance(value))
+    throw new Error(
+      'Unsupported measured-result contract. Each timed result needs a stable id, resultType, distance, stroke, course, explicit totalSeconds (or null), and verificationStatus.',
+    )
+  return structuredClone(value)
+}
 
 export function parseRipeArchive(text: string): VerifiedArchiveExport {
   if (new TextEncoder().encode(text).length > MAX_ARCHIVE_BYTES)
@@ -125,7 +139,7 @@ export function reviewRipeArchive(
     if (session.approval.status !== 'verified')
       return row(
         'unverified',
-        'Session is provisional; no confirmed records will be created.',
+        'Session is provisional or unverified; no confirmed records will be created.',
       )
     const missing = ids.filter((id) => !known.has(id))
     if (missing.length)
@@ -244,6 +258,21 @@ export function validateArchiveState(
     )
       throw new Error('Invalid rollback audit record.')
     const sessions = value.sessions.filter((s) => s.batchId === b.id)
+    if (b.sourceChecks !== undefined) {
+      if (
+        !Array.isArray(b.sourceChecks) ||
+        b.sourceChecks.length !== sessions.length ||
+        b.sourceChecks.some(
+          (check) =>
+            check.method !== 'sha256-selected-json' ||
+            !Number.isFinite(Date.parse(check.checkedAt)) ||
+            !sessions.some((s) => s.session.source.checksum === check.checksum),
+        ) ||
+        new Set(b.sourceChecks.map((c) => c.checksum)).size !==
+          b.sourceChecks.length
+      )
+        throw new Error('Invalid source-check audit evidence.')
+    }
     const ready = b.review.filter((r) => r.status === 'ready')
     if (
       !ready.length ||
@@ -262,6 +291,123 @@ export function validateArchiveState(
       !Number.isFinite(Date.parse(value.recovery.restoredAt)))
   )
     throw new Error('Invalid recovery audit record.')
+  if (value.bridge !== undefined) {
+    const bridge = value.bridge
+    const text = (v: unknown) =>
+      typeof v === 'string' && v.trim().length > 0 && v.length <= 500
+    if (
+      !bridge ||
+      !Array.isArray(bridge.identities) ||
+      !Array.isArray(bridge.sessions) ||
+      !Array.isArray(bridge.audit)
+    )
+      throw new Error('Invalid saved Bridge reconciliation.')
+    const active = new Set<string>()
+    for (const link of bridge.identities) {
+      if (
+        ![
+          link.connectionId,
+          link.sourceName,
+          link.athleteId,
+          link.verifiedBy,
+        ].every(text) ||
+        !athleteIds.includes(link.athleteId) ||
+        !Number.isFinite(Date.parse(link.verifiedAt)) ||
+        typeof link.active !== 'boolean'
+      )
+        throw new Error('Invalid saved Bridge identity.')
+      const key = JSON.stringify([link.connectionId, link.sourceName])
+      if (link.active && active.has(key))
+        throw new Error('Conflicting saved Bridge identities.')
+      if (link.active) active.add(key)
+      if (
+        !bridge.audit.some(
+          (event) =>
+            event.action === 'verify' &&
+            event.connectionId === link.connectionId &&
+            event.sourceName === link.sourceName &&
+            event.athleteId === link.athleteId &&
+            event.by === link.verifiedBy &&
+            event.at === link.verifiedAt,
+        )
+      )
+        throw new Error(
+          'Saved Bridge identity has no matching verification audit.',
+        )
+      if (
+        !link.active &&
+        !bridge.audit.some(
+          (event) =>
+            event.action === 'revoke' &&
+            event.connectionId === link.connectionId &&
+            event.sourceName === link.sourceName &&
+            event.athleteId === link.athleteId &&
+            typeof event.reason === 'string' &&
+            event.reason.trim(),
+        )
+      )
+        throw new Error('Revoked Bridge identity has no revocation audit.')
+      if (
+        !value.sessions.some(
+          (s) =>
+            s.archiveId === link.connectionId &&
+            s.session.participants.some(
+              (p) => p.athleteId === link.athleteId,
+            ) &&
+            batches
+              .get(s.batchId)
+              ?.sourceChecks?.some(
+                (check) => check.checksum === s.session.source.checksum,
+              ),
+        )
+      )
+        throw new Error(
+          'Saved Bridge identity has no checksum-verified import evidence.',
+        )
+    }
+    const times = new Set<string>()
+    for (const link of bridge.sessions) {
+      const key = JSON.stringify([link.connectionId, link.sessionId])
+      if (
+        ![link.connectionId, link.sessionId].every(text) ||
+        !/^sha256:[a-f0-9]{64}$/.test(link.checksum) ||
+        !Number.isFinite(Date.parse(link.startsAt)) ||
+        times.has(key)
+      )
+        throw new Error('Invalid saved Bridge session time.')
+      times.add(key)
+      if (
+        !value.sessions.some(
+          (s) =>
+            s.archiveId === link.connectionId &&
+            s.session.id === link.sessionId &&
+            s.session.source.checksum === link.checksum &&
+            s.session.startsAt === link.startsAt &&
+            batches
+              .get(s.batchId)
+              ?.sourceChecks?.some((check) => check.checksum === link.checksum),
+        )
+      )
+        throw new Error(
+          'Saved Bridge session time has no checksum-verified import evidence.',
+        )
+    }
+    for (const event of bridge.audit) {
+      if (
+        ![
+          event.connectionId,
+          event.sourceName,
+          event.athleteId,
+          event.by,
+        ].every(text) ||
+        !athleteIds.includes(event.athleteId) ||
+        !['verify', 'revoke'].includes(event.action) ||
+        !Number.isFinite(Date.parse(event.at)) ||
+        (event.action === 'revoke' && !text(event.reason))
+      )
+        throw new Error('Invalid Bridge identity audit.')
+    }
+  }
   const seen = emptyArchive()
   for (const s of value.sessions) {
     const batch = batches.get(s.batchId)

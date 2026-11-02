@@ -46,6 +46,14 @@ export function athleteTrainingSummary(
         ).length,
       0,
     ),
+    unverifiedMeasurements: rows.reduce(
+      (sum, row) =>
+        sum +
+        row.participant.performances.filter(
+          (result) => result.verificationStatus === 'unverified',
+        ).length,
+      0,
+    ),
     missingTimes: rows.reduce(
       (sum, r) =>
         sum +

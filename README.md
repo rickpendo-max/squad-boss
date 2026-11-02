@@ -9,6 +9,12 @@ performance and imported archive evidence. It has no backend or authenticated
 access control. Use the included fictional Demo Athlete for cloud demonstrations.
 Actual Windows archive files have not been accessed or imported.
 
+The integrated importer now supports read-only selection of a local `.ripe_bridge`
+folder, exact source-JSON SHA-256 verification, persistent reviewed identity links,
+and explicit measured results feeding the existing athlete performance tools.
+[Windows connection and supported-contract guide](docs/bridge-local-workflow.md)
+documents the working flow and the real-export/security checks still outstanding.
+
 - [Technical assessment and remaining boundaries](docs/technical-assessment.md)
 - [Archive contract, local connection and recovery](docs/verified-archive-integration.md)
 

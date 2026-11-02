@@ -2,7 +2,11 @@ import type {
   VerifiedArchiveExport,
   ArchiveParticipant,
 } from '../types/archive'
-import { parseRipeArchive } from './ripe-archive.ts'
+import {
+  canonical,
+  parseArchivePerformance,
+  parseRipeArchive,
+} from './ripe-archive.ts'
 
 /**
  * Bridge v0.2 uses a different wire format from the application importer.
@@ -17,6 +21,7 @@ export interface BridgeConversionOptions {
   /** Explicit review attestation, NOT a claim about who approved the original source. */
   attestedBy: string
   attestedAt: string
+  previousSessions?: VerifiedArchiveExport['sessions']
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -76,6 +81,26 @@ export function adaptBridgeV02(
     (entry: unknown) => {
       if (!object(entry) || !object(entry.record)) fail('invalid session entry')
       const record = entry.record as UnknownRecord
+      if (
+        record.timed_results !== undefined &&
+        !Array.isArray(record.timed_results)
+      )
+        fail(
+          'Unsupported timed_results structure. No measurements were imported.',
+        )
+      const measured = ((record.timed_results ?? []) as unknown[]).map(
+        (row) => {
+          if (!object(row) || !string(row.athlete_name))
+            fail(
+              'A measured result needs an explicit source athlete_name; unknown layouts cannot be guessed.',
+            )
+          const { athlete_name, ...performance } = row
+          return {
+            name: athlete_name,
+            performance: parseArchivePerformance(performance),
+          }
+        },
+      )
       const id = entry.archive_id
       if (!string(id) || seen.has(id))
         fail('missing or repeated session identity')
@@ -95,7 +120,9 @@ export function adaptBridgeV02(
         fail(`invalid date for session ${id}`)
       const startsAt = Object.hasOwn(options.startsAtBySessionId, id)
         ? options.startsAtBySessionId[id]
-        : undefined
+        : record.starts_at
+      if (record.starts_at !== undefined && record.starts_at !== startsAt)
+        fail(`session ${id} has conflicting source and reconciled start times`)
       if (
         !string(startsAt) ||
         !timestampPattern.test(startsAt) ||
@@ -148,6 +175,7 @@ export function adaptBridgeV02(
         ...Object.keys(completed),
         ...present,
         ...Object.keys(absent),
+        ...measured.map((result) => result.name),
       ])
       const ids = new Set<string>()
       const participants: ArchiveParticipant[] = [...names].map((name) => {
@@ -174,8 +202,10 @@ export function adaptBridgeV02(
           completedDistanceMeters: Object.hasOwn(completed, name)
             ? completed[name]
             : null,
-          // Descriptions and result counts are not measured times.
-          performances: [],
+          // Counts, descriptions and protocols never become measured results.
+          performances: measured
+            .filter((result) => result.name === name)
+            .map((result) => result.performance),
         }
       })
       if (!participants.length)
@@ -222,6 +252,16 @@ export function adaptBridgeV02(
       }
     },
   )
+  for (const session of sessions) {
+    const previous = options.previousSessions?.find(
+      (old) =>
+        old.id === session.id &&
+        canonical({ ...old, approval: null }) ===
+          canonical({ ...session, approval: null }),
+    )
+    if (previous)
+      session.approval = { ...previous.approval } as typeof session.approval
+  }
   return parseRipeArchive(
     JSON.stringify({
       format: 'ripe-verified-archive-v1',

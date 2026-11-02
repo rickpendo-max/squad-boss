@@ -4,7 +4,7 @@ import type {
   SwimmingStroke,
 } from '../performance'
 
-export type Verification = 'verified' | 'provisional'
+export type Verification = 'verified' | 'provisional' | 'unverified'
 
 export interface ArchivePerformance {
   id: string
@@ -75,6 +75,37 @@ export interface ArchiveBatch {
   review: ImportReviewRow[]
   status: 'active' | 'rolled-back'
   rollback?: { at: string; by: string; reason: string }
+  sourceChecks?: {
+    checksum: string
+    method: 'sha256-selected-json'
+    checkedAt: string
+  }[]
+}
+
+export interface BridgeIdentityLink {
+  connectionId: string
+  sourceName: string
+  athleteId: string
+  verifiedBy: string
+  verifiedAt: string
+  active: boolean
+}
+
+export interface BridgeSessionLink {
+  connectionId: string
+  sessionId: string
+  checksum: string
+  startsAt: string
+}
+
+export interface BridgeMappingAudit {
+  connectionId: string
+  sourceName: string
+  athleteId: string
+  action: 'verify' | 'revoke'
+  by: string
+  at: string
+  reason?: string
 }
 
 export interface ArchiveState {
@@ -82,4 +113,9 @@ export interface ArchiveState {
   sessions: ImportedSession[]
   batches: ArchiveBatch[]
   recovery?: { restoredAt: string; restoredBy: string }
+  bridge?: {
+    identities: BridgeIdentityLink[]
+    sessions: BridgeSessionLink[]
+    audit: BridgeMappingAudit[]
+  }
 }
