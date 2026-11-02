@@ -4,6 +4,7 @@ import {
   parseArchiveBackup,
   parseRipeArchive,
 } from '../../data-sources/ripe-archive'
+import { adaptBridgeV02 } from '../../data-sources/ripe-bridge-v02-adapter'
 import { syntheticArchive } from '../../data/synthetic-archive'
 import { coachingRepository } from '../../repositories/in-memory-coaching-repository'
 import type { VerifiedArchiveExport } from '../../types/archive'
@@ -25,6 +26,10 @@ export default function ArchiveImportPanel({
   onChange: () => void
 }) {
   const [input, setInput] = useState<VerifiedArchiveExport>()
+  const [bridge, setBridge] = useState<Record<string, unknown> | null>(null)
+  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [sessionTimes, setSessionTimes] = useState<Record<string, string>>({})
+  const [attestationTime, setAttestationTime] = useState('')
   const [fileName, setFileName] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -37,10 +42,24 @@ export default function ArchiveImportPanel({
   const rows = input ? coachingRepository.reviewArchive(input) : []
   const ready = rows.filter((r) => r.status === 'ready').length
   const state = coachingRepository.getArchiveState()
+  const athletes = coachingRepository.listAthletes()
+  const bridgeEntries = bridge && Array.isArray(bridge.sessions) ? bridge.sessions.filter((e): e is Record<string, unknown> => e !== null && typeof e === 'object' && !Array.isArray(e)) : []
+  const bridgeNames = [...new Set(bridgeEntries.flatMap((entry) => {
+    const r = entry.record as Record<string, unknown> | undefined
+    if (!r || typeof r !== 'object') return []
+    const names: string[] = []
+    for (const field of ['distance_m', 'athlete_distances_m', 'absent']) {
+      const v = r[field]
+      if (v && typeof v === 'object' && !Array.isArray(v)) names.push(...Object.keys(v))
+    }
+    if (Array.isArray(r.present)) names.push(...r.present.filter((v): v is string => typeof v === 'string'))
+    return names
+  }))]
 
   async function readFile(file?: File) {
     const token = ++request.current
     setInput(undefined)
+    setBridge(null)
     setApproved(false)
     setError('')
     setNotice('')
@@ -48,10 +67,20 @@ export default function ArchiveImportPanel({
     try {
       if (file.size > MAX_ARCHIVE_BYTES)
         throw new Error('Archive exceeds the 5 MiB limit.')
-      const parsed = parseRipeArchive(await file.text())
+      const contents = await file.text()
+      const value: unknown = JSON.parse(contents)
       if (request.current !== token) return
       setFileName(file.name)
-      setInput(parsed)
+      if (value && typeof value === 'object' && !Array.isArray(value) &&
+          'schema' in value && value.schema === 'ripe-verified-archive-v1' &&
+          'sessions' in value && Array.isArray(value.sessions)) {
+        setBridge(value as Record<string, unknown>)
+        setMapping({})
+        setSessionTimes({})
+        setAttestationTime('')
+      } else {
+        setInput(parseRipeArchive(contents))
+      }
     } catch (e) {
       if (request.current === token)
         setError(e instanceof Error ? e.message : 'Unable to read archive.')
@@ -104,10 +133,7 @@ export default function ArchiveImportPanel({
           can enter confirmed records. No files are sent to a server.
         </p>
         <p className="ripe-muted">
-          Bridge v0.2 field compatibility is pending a redacted schema/export.
-          This importer validates the documented application contract. Source
-          checksums are retained claims; original files are not available here
-          to authenticate them.
+          Bridge v0.2 files require explicit local athlete matching and session-time confirmation. Source checksums are retained claims; original files are not available here to authenticate them.
         </p>
         <label className="ripe-field">
           Ripe export JSON (maximum 5 MiB)
@@ -162,6 +188,58 @@ export default function ArchiveImportPanel({
           This label records your action; it is not authenticated access
           control. Use a trusted local browser profile.
         </small>
+        {bridge && (
+          <section className="ripe-audit">
+            <h3>Bridge v0.2 · Private reconciliation</h3>
+            <p>Original source paths are not displayed or transferred. Confirm each source athlete and each session's actual start time. No data is imported until the converted export passes review.</p>
+            {bridgeNames.map((name) => (
+              <label className="ripe-field" key={name}>
+                Source athlete: {name}
+                <select value={mapping[name] ?? ''} onChange={(e) => {
+                  setMapping((old) => ({ ...old, [name]: e.target.value }))
+                  setInput(undefined)
+                  setApproved(false)
+                }}>
+                  <option value="">Select verified athlete identity</option>
+                  {athletes.map((athlete) => (
+                    <option key={athlete.id} value={athlete.id}>{athlete.fullName ?? `${athlete.firstName} ${athlete.lastName}`} · {athlete.id}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+            {bridgeEntries.map((entry, index) => (
+              <label className="ripe-field" key={index}>
+                Confirmed session {String(entry.archive_id)} start (ISO 8601 with offset, e.g. 2026-10-29T06:00:00+10:00)
+                <input value={sessionTimes[String(entry.archive_id)] ?? ''} onChange={(e) => {
+                  setSessionTimes((old) => ({ ...old, [String(entry.archive_id)]: e.target.value }))
+                  setInput(undefined)
+                  setApproved(false)
+                }} placeholder="YYYY-MM-DDTHH:mm:ss+10:00" />
+              </label>
+            ))}
+            <label className="ripe-field">
+              Coach attestation time (ISO 8601 with offset)
+              <input value={attestationTime} onChange={(e) => setAttestationTime(e.target.value)} placeholder="YYYY-MM-DDTHH:mm:ss+10:00" />
+            </label>
+            <button type="button" disabled={!coach.trim()} onClick={() => {
+              try {
+                const converted = adaptBridgeV02(bridge, {
+                  archiveId: 'ripe-bridge-v02',
+                  athleteIdsBySourceName: mapping,
+                  startsAtBySessionId: sessionTimes,
+                  attestedBy: coach.trim(),
+                  attestedAt: attestationTime,
+                })
+                setInput(parseRipeArchive(JSON.stringify(converted)))
+                setApproved(false)
+                setError('')
+                setNotice('Converted for review. Original Bridge file remains unchanged.')
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Bridge conversion failed.')
+              }
+            }}>Validate Bridge export for review</button>
+          </section>
+        )}
         {input && (
           <>
             <p>
