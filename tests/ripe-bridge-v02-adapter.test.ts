@@ -82,21 +82,19 @@ test('adapts all three Bridge v0.2 wire variants without inventing times or comp
 })
 
 test('blocks unknown identities, missing session times, invalid approvals and conflicting attendance', () => {
-  const cases: Array<() => void> = []
   const b = bridge()
   const o = options()
-  delete o.athleteIdsBySourceName['Fictional Two']
+  o.athleteIdsBySourceName['Fictional Two'] = ''
   assert.throws(() => adaptBridgeV02(b, o), /unmapped/)
   const o2 = options()
-  delete o2.startsAtBySessionId.A
+  o2.startsAtBySessionId.A = ''
   assert.throws(() => adaptBridgeV02(b, o2), /confirmed/)
   const b2 = bridge()
-  b2.sessions[0].record.status = 'pending'
+  Object.assign(b2.sessions[0].record, { status: 'pending' })
   assert.throws(() => adaptBridgeV02(b2, options()), /not coach-verified/)
   const b3 = bridge()
-  b3.sessions[2].record.present.push('Fictional Two')
+  Object.assign(b3.sessions[2].record, { present: ['Fictional One', 'Fictional Two'] })
   assert.throws(() => adaptBridgeV02(b3, options()), /conflicting attendance/)
-  void cases
 })
 
 test('rejects repeated source session identities and invalid checksums', () => {
