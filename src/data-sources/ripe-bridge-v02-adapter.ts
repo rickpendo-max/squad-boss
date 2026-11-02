@@ -126,10 +126,11 @@ export function adaptBridgeV02(
       if (
         !string(startsAt) ||
         !timestampPattern.test(startsAt) ||
-        !Number.isFinite(Date.parse(startsAt)) ||
-        startsAt.slice(0, 10) !== record.date
+        !Number.isFinite(Date.parse(startsAt))
       )
-        fail(`session ${id} needs a confirmed offset-qualified start time`)
+        fail(`session ${id} needs a valid confirmed offset-qualified start time`)
+      if (startsAt.slice(0, 10) !== record.date)
+        fail(`session ${id} start date ${startsAt.slice(0, 10)} does not match verified source date ${record.date}; check the archive record before proceeding`)
       const approvalFields = [
         ['status', 'coach_verified'],
         ['review_status', 'coach_confirmed'],
