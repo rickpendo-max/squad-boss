@@ -12,7 +12,7 @@ function Navigation({ activeView, onNavigate }: NavigationProps) {
           className={`nav-item ${activeView === 'dashboard' ? 'active' : ''}`}
           onClick={() => onNavigate('dashboard')}
         >
-          Today
+          Squad overview
         </button>
 
         <button
@@ -20,24 +20,10 @@ function Navigation({ activeView, onNavigate }: NavigationProps) {
           className={`nav-item ${activeView === 'athlete-profile' ? 'active' : ''}`}
           onClick={() => onNavigate('athlete-profile')}
         >
-          Athlete Profile
+          Athlete workspace
         </button>
 
-        <button type="button" className="nav-item">
-          Athletes
-        </button>
-
-        <button type="button" className="nav-item">
-          Plan
-        </button>
-
-        <button type="button" className="nav-item">
-          Train
-        </button>
-
-        <button type="button" className="nav-item">
-          Insights
-        </button>
+        <p className="ripe-nav-note">Capture → Compare → Track<br />Highlight → Decide → Review</p>
       </nav>
     </aside>
   )

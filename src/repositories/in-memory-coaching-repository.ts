@@ -6,6 +6,15 @@ import {
   priorities,
 } from '../data/coaching.ts'
 import { athletes } from '../data/athletes.ts'
+import { syntheticAthlete } from '../data/synthetic-archive.ts'
+import {
+  archivePerformanceResults,
+  emptyArchive,
+  parseArchiveBackup,
+  reviewRipeArchive,
+  validateArchiveState,
+} from '../data-sources/ripe-archive.ts'
+import type { ArchiveState, VerifiedArchiveExport } from '../types/archive'
 import {
   qasPacingBenchmarkProfiles,
   qasPacingDerivedModels,
@@ -38,10 +47,12 @@ import type {
 import {
   loadPersistedCoachingData,
   savePersistedCoachingData,
+  COACHING_STORAGE_KEY,
   type KeyValueStorage,
 } from './local-coaching-persistence.ts'
 
 export interface InMemoryCoachingData {
+  archive?: ArchiveState
   athletes: Athlete[]
   observations: Observation[]
   interpretations: Interpretation[]
@@ -151,7 +162,11 @@ function validatePriorityContent(priority: Priority) {
     throw new Error(`Priority ${priority.id} category is invalid`)
   }
 
-  if (!Number.isInteger(priority.rank) || priority.rank < 1 || priority.rank > 3) {
+  if (
+    !Number.isInteger(priority.rank) ||
+    priority.rank < 1 ||
+    priority.rank > 3
+  ) {
     throw new Error(`Priority ${priority.id} rank must be 1, 2 or 3`)
   }
 
@@ -215,7 +230,7 @@ function validatePerformanceResult(result: PerformanceResult) {
   if (
     result.segments.length > 0 &&
     Math.abs(segmentTotal - result.totalSeconds) >
-    RESULT_TOTAL_TOLERANCE_SECONDS
+      RESULT_TOTAL_TOLERANCE_SECONDS
   ) {
     throw new Error(
       `Performance Result ${result.id} segments must sum to total within ${RESULT_TOTAL_TOLERANCE_SECONDS} seconds`,
@@ -234,6 +249,19 @@ function copyPerformanceResult(result: PerformanceResult): PerformanceResult {
 }
 
 export class InMemoryCoachingRepository implements CoachingRepository {
+  private revision = 0
+  private listeners = new Set<() => void>()
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+  getRevision = () => this.revision
+  private notify() {
+    this.revision++
+    this.listeners.forEach((listener) => listener())
+  }
   private readonly data: InMemoryCoachingData
   private readonly dependencies: InMemoryCoachingDependencies
 
@@ -316,9 +344,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   getInterpretationsByAthleteId(athleteId: string) {
     return this.data.interpretations
       .filter((interpretation) => interpretation.athleteId === athleteId)
-      .toSorted((left, right) =>
-        right.createdAt.localeCompare(left.createdAt),
-      )
+      .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))
   }
 
   createInterpretation(input: CreateInterpretationInput) {
@@ -447,7 +473,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   getPerformanceResultsByAthleteId(athleteId: string) {
-    return (this.data.performanceResults ?? [])
+    return this.allPerformanceResults()
       .filter((result) => result.athleteId === athleteId)
       .toSorted(
         (left, right) =>
@@ -487,6 +513,15 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     resultId: string,
     input: CreatePerformanceResultInput,
   ) {
+    if (
+      this.allPerformanceResults().some(
+        (r) => r.id === resultId && r.archiveProvenance,
+      )
+    ) {
+      throw new Error(
+        'Archive evidence is immutable. Roll back the import batch and review a corrected export.',
+      )
+    }
     const performanceResults = this.data.performanceResults ?? []
     const index = performanceResults.findIndex(
       (result) => result.id === resultId,
@@ -543,7 +578,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   getPerformanceComparison(resultId: string) {
-    const result = (this.data.performanceResults ?? []).find(
+    const result = this.allPerformanceResults().find(
       (candidate) => candidate.id === resultId,
     )
 
@@ -559,7 +594,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
 
     return calculatePerformanceComparison(
       result,
-      this.data.performanceResults ?? [],
+      this.allPerformanceResults(),
       athlete,
       this.data.benchmarkProfiles ?? [],
       this.data.derivedBenchmarkModels ?? [],
@@ -567,9 +602,17 @@ export class InMemoryCoachingRepository implements CoachingRepository {
   }
 
   private validate() {
+    if (this.data.archive !== undefined)
+      validateArchiveState(
+        this.data.archive,
+        this.data.athletes.map((a) => a.id),
+      )
     const athleteIds = new Set(this.data.athletes.map((athlete) => athlete.id))
     const observationsById = new Map(
-      this.data.observations.map((observation) => [observation.id, observation]),
+      this.data.observations.map((observation) => [
+        observation.id,
+        observation,
+      ]),
     )
     const interpretationsById = new Map(
       this.data.interpretations.map((interpretation) => [
@@ -605,10 +648,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
 
     for (const interpretation of this.data.interpretations) {
       validateInterpretationContent(interpretation)
-      this.validateInterpretationObservations(
-        interpretation,
-        observationsById,
-      )
+      this.validateInterpretationObservations(interpretation, observationsById)
     }
 
     for (const priority of this.data.priorities) {
@@ -642,8 +682,106 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     }
   }
 
+  private allPerformanceResults() {
+    return [
+      ...(this.data.performanceResults ?? []),
+      ...archivePerformanceResults(this.data.archive ?? emptyArchive()),
+    ]
+  }
+
+  getArchiveState() {
+    return structuredClone(this.data.archive ?? emptyArchive())
+  }
+
+  restoreArchiveBackup(text: string, by: string) {
+    if (!by.trim()) throw new Error('Restoring coach is required.')
+    const current = this.getArchiveState()
+    if (current.batches.length || current.sessions.length)
+      throw new Error(
+        'Restore is allowed only into an empty archive. Existing imports will never be replaced.',
+      )
+    const archive = parseArchiveBackup(
+      text,
+      this.data.athletes.map((a) => a.id),
+    )
+    archive.recovery = { restoredAt: this.dependencies.now(), restoredBy: by }
+    this.commitArchive(archive)
+  }
+
+  reviewArchive(input: VerifiedArchiveExport) {
+    return reviewRipeArchive(
+      input,
+      this.getArchiveState(),
+      this.data.athletes.map((a) => a.id),
+    )
+  }
+
+  importArchive(
+    input: VerifiedArchiveExport,
+    fileName: string,
+    importedBy: string,
+  ) {
+    if (!fileName.trim() || !importedBy.trim())
+      throw new Error('Source filename and importing coach are required.')
+    const review = this.reviewArchive(input)
+    const ready = new Set(
+      review.filter((r) => r.status === 'ready').map((r) => r.sessionId),
+    )
+    if (!ready.size)
+      throw new Error(
+        'No importable sessions. Resolve the review findings first.',
+      )
+    const next = this.getArchiveState()
+    const batch = {
+      id: this.dependencies.createId(),
+      archiveId: input.archiveId,
+      fileName,
+      exportedAt: input.exportedAt,
+      importedBy,
+      importedAt: this.dependencies.now(),
+      review,
+      status: 'active' as const,
+    }
+    next.batches.push(batch)
+    next.sessions.push(
+      ...input.sessions
+        .filter((s) => ready.has(s.id))
+        .map((session) => ({
+          archiveId: input.archiveId,
+          batchId: batch.id,
+          session: structuredClone(session),
+        })),
+    )
+    this.commitArchive(next)
+    return structuredClone(batch)
+  }
+
+  rollbackArchiveBatch(batchId: string, reason: string, by: string) {
+    if (!reason.trim() || !by.trim())
+      throw new Error('A rollback reason and coach are required.')
+    const next = this.getArchiveState()
+    const batch = next.batches.find((b) => b.id === batchId)
+    if (!batch || batch.status !== 'active')
+      throw new Error('Active import batch not found.')
+    batch.status = 'rolled-back'
+    batch.rollback = { at: this.dependencies.now(), by, reason }
+    this.commitArchive(next)
+  }
+
+  private commitArchive(archive: ArchiveState) {
+    validateArchiveState(
+      archive,
+      this.data.athletes.map((a) => a.id),
+    )
+    // Persist the complete staged snapshot before publishing any in-memory change.
+    this.dependencies.onChange?.({ ...this.data, archive })
+    this.data.archive = archive
+    this.notify()
+  }
+
   private persist() {
     this.dependencies.onChange?.(this.data)
+    this.notify()
   }
 
   private requireAthlete(athleteId: string, recordId: string) {
@@ -736,7 +874,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
 }
 
 const seedCoachingData: InMemoryCoachingData = {
-  athletes,
+  athletes: [...athletes, syntheticAthlete],
   observations,
   interpretations,
   priorities,
@@ -759,18 +897,46 @@ function getBrowserStorage(): KeyValueStorage | undefined {
 }
 
 const browserStorage = getBrowserStorage()
-const hydratedData = loadPersistedCoachingData(browserStorage, seedCoachingData)
+let storageHealthy = true
+const hydratedData = loadPersistedCoachingData(
+  browserStorage,
+  seedCoachingData,
+  (message) => {
+    storageHealthy = false
+    console.warn(message)
+  },
+)
+let lastSaved: string | null = null
+try {
+  lastSaved = browserStorage?.getItem(COACHING_STORAGE_KEY) ?? null
+} catch {
+  storageHealthy = false
+}
 
 function createBrowserRepository() {
   const dependencies: InMemoryCoachingDependencies = {
     createId: () => crypto.randomUUID(),
     now: () => new Date().toISOString(),
-    onChange: (data) => savePersistedCoachingData(browserStorage, data),
+    onChange: (data) => {
+      if (!browserStorage)
+        throw new Error('Local storage is unavailable. Import was not saved.')
+      if (!storageHealthy)
+        throw new Error(
+          'Stored data needs recovery. Export the browser storage before making changes.',
+        )
+      if (browserStorage.getItem(COACHING_STORAGE_KEY) !== lastSaved)
+        throw new Error(
+          'Data changed in another tab. Reload before importing or editing.',
+        )
+      savePersistedCoachingData(browserStorage, data, console.warn, true)
+      lastSaved = browserStorage.getItem(COACHING_STORAGE_KEY)
+    },
   }
 
   try {
     return new InMemoryCoachingRepository(hydratedData, dependencies)
   } catch (error) {
+    storageHealthy = false
     console.warn(
       'Squad Boss ignored invalid local coaching data and loaded defaults.',
       error,

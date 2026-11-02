@@ -1,26 +1,34 @@
-# Squad Boss
+# Ripe Performance
 
-Squad Boss is a React and TypeScript coaching dashboard for viewing squad
-readiness, session completion, training blocks, weekly sessions, and athlete
-status information.
+Ripe Performance integrates the existing Squad Boss performance intelligence
+with a unified athlete workspace and a reviewed verified-session archive importer.
+React, TypeScript and Vite remain the application foundation.
 
-The project currently uses local mock data and has no backend or persistence
-layer.
+The app uses development seed profiles plus browser-local persistence for coaching,
+performance and imported archive evidence. It has no backend or authenticated
+access control. Use the included fictional Demo Athlete for cloud demonstrations.
+Actual Windows archive files have not been accessed or imported.
+
+- [Technical assessment and remaining boundaries](docs/technical-assessment.md)
+- [Archive contract, local connection and recovery](docs/verified-archive-integration.md)
 
 ## Development
 
-Requires a current Node.js installation.
+Requires Node.js 24 (validated with 24.19.0).
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
 ## Checks
 
 ```sh
+npm test
+node --test --test-isolation=none tests/*.test.ts
 npm run lint
 npm run build
+git diff --check
 ```
 
 ## Structure

@@ -21,4 +21,17 @@ export interface Athlete
     AthleteTesting,
     AthleteCoach,
     AthleteCompetition,
-    AthleteCompassData {}
+    AthleteCompassData {
+  iappGoals?: {
+    id: string
+    goal: string
+    reviewAt?: string
+    status: 'active' | 'completed'
+  }[]
+  performanceSupportTeam?: {
+    id: string
+    role: string
+    name: string
+    note?: string
+  }[]
+}

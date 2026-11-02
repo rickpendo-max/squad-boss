@@ -36,6 +36,7 @@ export interface PerformanceResult {
   createdAt: string
   createdBy: string
   importMetadata?: PerformanceImportMetadata
+  archiveProvenance?: import('../archive').ArchiveProvenance
 }
 
 export interface PerformanceImportMetadata {

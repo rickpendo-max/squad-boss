@@ -520,9 +520,12 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
               className="secondary-button performance-edit-button"
               type="button"
               onClick={startEditing}
+              disabled={Boolean(selectedResult.archiveProvenance)}
+              title={selectedResult.archiveProvenance ? 'Archive evidence is immutable; use batch rollback and review a corrected export.' : undefined}
             >
               Edit
             </button>
+            {selectedResult.archiveProvenance && <small>Verified archive · {selectedResult.archiveProvenance.sourceFileName} · read-only source evidence</small>}
           </div>
         ) : (
           <p>No performance results recorded.</p>

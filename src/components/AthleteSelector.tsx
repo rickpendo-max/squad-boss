@@ -12,6 +12,7 @@ export default function AthleteSelector() {
       <h2>Current Athlete</h2>
 
       <select
+        aria-label="Current athlete"
         value={selectedAthlete.id}
         onChange={(event) => {
           const athlete = athletes.find(
@@ -38,7 +39,7 @@ export default function AthleteSelector() {
       </p>
 
       <p>
-        <strong>Current Block:</strong> {selectedAthlete.currentBlock}
+        <strong>Current Block:</strong> {selectedAthlete.currentBlock ?? 'Not recorded'}
       </p>
     </section>
   )

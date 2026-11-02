@@ -11,7 +11,7 @@ import Dashboard from './features/dashboard/Dashboard'
 function App() {
   const [activeView, setActiveView] = useState<
     'dashboard' | 'athlete-profile'
-  >('dashboard')
+  >('athlete-profile')
   const { selectedAthlete } = useAthlete()
   const coachNotes = [...selectedAthlete.coachNotes].sort((a, b) =>
     b.date.localeCompare(a.date),
@@ -36,9 +36,9 @@ function App() {
         </section>
 
         <section className="card">
-          <h2>Tasks</h2>
-          <p>Review Thursday session</p>
-          <p>Update athlete goal</p>
+          <h2>Data boundary</h2>
+          <p>Local browser storage. Existing profiles and dashboard values are development seed data.</p>
+          <p>Archive backups cover imported sessions and their audit history. Other coaching records need a separate browser-storage backup.</p>
         </section>
       </aside>
     </div>

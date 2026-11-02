@@ -7,6 +7,8 @@ import InterpretationPanel from './InterpretationPanel'
 import ObservationPanel from './ObservationPanel'
 import PerformanceComparisonPanel from './PerformanceComparisonPanel'
 import PriorityPanel from './PriorityPanel'
+import IntegratedWorkspace from './IntegratedWorkspace'
+import ArchiveImportPanel from './ArchiveImportPanel'
 
 function displayList(values?: string[]) {
   return values?.length ? values.join(', ') : 'Not recorded'
@@ -14,6 +16,7 @@ function displayList(values?: string[]) {
 
 function AthleteProfile() {
   const [isCompassOpen, setIsCompassOpen] = useState(false)
+  const [archiveRevision, setArchiveRevision] = useState(0)
   const { selectedAthlete } = useAthlete()
   const fullName =
     selectedAthlete.fullName ??
@@ -23,8 +26,11 @@ function AthleteProfile() {
     <main className="workspace">
       <AthleteSelector />
 
+      <IntegratedWorkspace athlete={selectedAthlete} />
+      <ArchiveImportPanel onChange={() => setArchiveRevision(r => r + 1)} />
+
       <PerformanceComparisonPanel
-        key={selectedAthlete.id}
+        key={`${selectedAthlete.id}:${archiveRevision}`}
         athleteId={selectedAthlete.id}
       />
 

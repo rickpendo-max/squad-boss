@@ -1,0 +1,132 @@
+{
+  "format": "ripe-verified-archive-v1",
+  "archiveId": "synthetic-demo",
+  "exportedAt": "2026-11-01T00:00:00Z",
+  "sessions": [
+    {
+      "id": "demo-session-1",
+      "title": "Synthetic pool session 1",
+      "startsAt": "2026-10-26T06:00:00+10:00",
+      "approval": {
+        "status": "verified",
+        "verifiedBy": "synthetic-coach",
+        "verifiedAt": "2026-10-29T00:00:00Z"
+      },
+      "source": {
+        "fileName": "synthetic-session-1.json",
+        "checksum": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "plannedDistanceMeters": 4500,
+      "participants": [
+        {
+          "athleteId": "demo-athlete-001",
+          "attendance": "present",
+          "completedDistanceMeters": 4200,
+          "performances": [
+            {
+              "id": "demo-100-free",
+              "resultType": "test",
+              "distance": 100,
+              "stroke": "freestyle",
+              "course": "LCM",
+              "totalSeconds": 65.4,
+              "verificationStatus": "verified"
+            },
+            {
+              "id": "demo-provisional",
+              "resultType": "training",
+              "distance": 50,
+              "stroke": "freestyle",
+              "course": "LCM",
+              "totalSeconds": 30.1,
+              "verificationStatus": "provisional"
+            },
+            {
+              "id": "demo-missing",
+              "resultType": "training",
+              "distance": 50,
+              "stroke": "backstroke",
+              "course": "LCM",
+              "totalSeconds": null,
+              "verificationStatus": "verified"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-session-2",
+      "title": "Synthetic pool session 2",
+      "startsAt": "2026-10-27T06:00:00+10:00",
+      "approval": {
+        "status": "verified",
+        "verifiedBy": "synthetic-coach",
+        "verifiedAt": "2026-10-29T00:00:00Z"
+      },
+      "source": {
+        "fileName": "synthetic-session-2.json",
+        "checksum": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "plannedDistanceMeters": 4500,
+      "participants": [
+        {
+          "athleteId": "demo-athlete-001",
+          "attendance": "present",
+          "completedDistanceMeters": null,
+          "performances": [
+            {
+              "id": "demo-100-free",
+              "resultType": "test",
+              "distance": 100,
+              "stroke": "freestyle",
+              "course": "LCM",
+              "totalSeconds": 64.8,
+              "verificationStatus": "verified"
+            },
+            {
+              "id": "demo-provisional",
+              "resultType": "training",
+              "distance": 50,
+              "stroke": "freestyle",
+              "course": "LCM",
+              "totalSeconds": 30.1,
+              "verificationStatus": "provisional"
+            },
+            {
+              "id": "demo-missing",
+              "resultType": "training",
+              "distance": 50,
+              "stroke": "backstroke",
+              "course": "LCM",
+              "totalSeconds": null,
+              "verificationStatus": "verified"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-session-3",
+      "title": "Synthetic pool session 3",
+      "startsAt": "2026-10-28T06:00:00+10:00",
+      "approval": {
+        "status": "verified",
+        "verifiedBy": "synthetic-coach",
+        "verifiedAt": "2026-10-29T00:00:00Z"
+      },
+      "source": {
+        "fileName": "synthetic-session-3.json",
+        "checksum": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "plannedDistanceMeters": 4500,
+      "participants": [
+        {
+          "athleteId": "demo-athlete-001",
+          "attendance": "absent",
+          "completedDistanceMeters": 0,
+          "performances": []
+        }
+      ]
+    }
+  ]
+}

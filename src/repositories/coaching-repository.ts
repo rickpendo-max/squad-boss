@@ -95,6 +95,17 @@ export interface CreatePerformanceResultInput {
 }
 
 export interface CoachingRepository {
+  getArchiveState(): import('../types/archive').ArchiveState
+  restoreArchiveBackup(text: string, by: string): void
+  reviewArchive(
+    input: import('../types/archive').VerifiedArchiveExport,
+  ): import('../types/archive').ImportReviewRow[]
+  importArchive(
+    input: import('../types/archive').VerifiedArchiveExport,
+    fileName: string,
+    importedBy: string,
+  ): import('../types/archive').ArchiveBatch
+  rollbackArchiveBatch(batchId: string, reason: string, by: string): void
   listAthletes(): Athlete[]
   getAthleteById(athleteId: string): Athlete | undefined
   listObservationsForAthlete(athleteId: string): Observation[]

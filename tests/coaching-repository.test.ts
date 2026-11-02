@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { getInitialAthlete } from '../src/context/athlete-selection.ts'
 import { athletes } from '../src/data/athletes.ts'
+import { syntheticAthlete } from '../src/data/synthetic-archive.ts'
 import { calculateSplitTotal } from '../src/domain/performance-entry.ts'
 import {
   filterPerformanceResults,
@@ -130,7 +131,7 @@ function createRepository(overrides: {
 test('returns athletes through the repository boundary', () => {
   assert.deepEqual(
     coachingRepository.listAthletes().map((athlete) => athlete.id),
-    athletes.map((athlete) => athlete.id),
+    [...athletes, syntheticAthlete].map((athlete) => athlete.id),
   )
   assert.equal(coachingRepository.getAthleteById(sam.id)?.id, sam.id)
 })

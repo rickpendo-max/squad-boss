@@ -1,4 +1,9 @@
-import type { Decision, Interpretation, Observation, Priority } from '../types/coaching'
+import type {
+  Decision,
+  Interpretation,
+  Observation,
+  Priority,
+} from '../types/coaching'
 import type { PerformanceResult } from '../types/performance'
 import type { InMemoryCoachingData } from './in-memory-coaching-repository'
 
@@ -11,6 +16,7 @@ export interface KeyValueStorage {
 }
 
 interface PersistedCoachingDataV1 {
+  archive?: import('../types/archive').ArchiveState
   version: 1
   observations: Observation[]
   interpretations: Interpretation[]
@@ -28,7 +34,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function readArray<T>(value: unknown, fallback: T[]): T[] {
-  return Array.isArray(value) ? (value as T[]) : fallback
+  if (value === undefined) return fallback
+  if (!Array.isArray(value))
+    throw new Error('stored collection is not an array')
+  return value as T[]
 }
 
 export function loadPersistedCoachingData(
@@ -51,6 +60,9 @@ export function loadPersistedCoachingData(
 
     return {
       ...fallback,
+      archive: parsed.archive as
+        | import('../types/archive').ArchiveState
+        | undefined,
       observations: readArray(parsed.observations, fallback.observations),
       interpretations: readArray(
         parsed.interpretations,
@@ -74,11 +86,16 @@ export function savePersistedCoachingData(
   storage: KeyValueStorage | undefined,
   data: InMemoryCoachingData,
   warn: (message: string) => void = console.warn,
+  strict = false,
 ) {
-  if (!storage) return
+  if (!storage) {
+    if (strict) throw new Error('Local storage is unavailable.')
+    return
+  }
 
   const persisted: PersistedCoachingDataV1 = {
     version: COACHING_STORAGE_VERSION,
+    archive: data.archive,
     observations: data.observations,
     interpretations: data.interpretations,
     priorities: data.priorities,
@@ -89,6 +106,10 @@ export function savePersistedCoachingData(
   try {
     storage.setItem(COACHING_STORAGE_KEY, JSON.stringify(persisted))
   } catch (error) {
+    if (strict)
+      throw new Error('Local save failed. No archive changes were applied.', {
+        cause: error,
+      })
     const detail = error instanceof Error ? error.message : String(error)
     warn(`Squad Boss could not save local coaching data: ${detail}`)
   }
