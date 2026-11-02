@@ -42,7 +42,7 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
         <span className="ripe-badge">
           {athlete.id === 'demo-athlete-001'
             ? 'Synthetic demonstration'
-            : 'Local development data'}
+            : summary.rows.length ? 'Imported archive evidence' : 'Local development profile'}
         </span>
       </section>
       <section className="ripe-section" aria-label="Season overview">
@@ -94,8 +94,8 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
             <span>Session evidence</span>
             <strong>{summary.rows.length || 'Not recorded'}</strong>
             <small>
-              {summary.provisionalMeasurements} provisional measurements
-              excluded
+              {summary.provisionalMeasurements} provisional and{' '}
+              {summary.unverifiedMeasurements} unverified measurements excluded
             </small>
           </div>
         </div>

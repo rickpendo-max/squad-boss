@@ -8,6 +8,17 @@ import {
 import { athletes } from '../data/athletes.ts'
 import { syntheticAthlete } from '../data/synthetic-archive.ts'
 import {
+  adaptBridgeV02,
+  type BridgeConversionOptions,
+} from '../data-sources/ripe-bridge-v02-adapter.ts'
+import {
+  bridgeEntries,
+  bridgeSourceNames,
+  verifyBridgeSourceFiles,
+  type ReadOnlySourceFile,
+} from '../data-sources/bridge-local-files.ts'
+import { rememberBridgeReconciliation } from '../domain/bridge-reconciliation.ts'
+import {
   archivePerformanceResults,
   emptyArchive,
   parseArchiveBackup,
@@ -721,6 +732,108 @@ export class InMemoryCoachingRepository implements CoachingRepository {
     fileName: string,
     importedBy: string,
   ) {
+    const { next, batch } = this.prepareArchiveImport(
+      input,
+      fileName,
+      importedBy,
+    )
+    this.commitArchive(next)
+    return structuredClone(batch)
+  }
+
+  async importBridgeArchive(
+    raw: unknown,
+    options: BridgeConversionOptions,
+    fileName: string,
+    importedBy: string,
+    sourceFiles: ReadOnlySourceFile[],
+  ) {
+    const revision = this.revision
+    const source = structuredClone(raw)
+    const reconciliation = structuredClone(options)
+    const input = adaptBridgeV02(source, {
+      ...reconciliation,
+      previousSessions: this.getArchiveState()
+        .sessions.filter((s) => s.archiveId === options.archiveId)
+        .map((s) => s.session),
+    })
+    const checks = await verifyBridgeSourceFiles(source, sourceFiles)
+    if (revision !== this.revision)
+      throw new Error(
+        'Data changed during source verification. Review this import again.',
+      )
+    const prepared = this.prepareArchiveImport(input, fileName, importedBy)
+    const imported = {
+      ...input,
+      sessions: prepared.next.sessions
+        .filter((s) => s.batchId === prepared.batch.id)
+        .map((s) => s.session),
+    }
+    const importedIds = new Set(imported.sessions.map((session) => session.id))
+    const usedNames = new Set(
+      bridgeSourceNames({
+        schema: 'ripe-verified-archive-v1',
+        sessions: bridgeEntries(source).filter((entry) =>
+          importedIds.has(entry.archive_id as string),
+        ),
+      }),
+    )
+    const verifiedOptions = {
+      ...reconciliation,
+      athleteIdsBySourceName: Object.fromEntries(
+        Object.entries(reconciliation.athleteIdsBySourceName).filter(([name]) =>
+          usedNames.has(name),
+        ),
+      ),
+    }
+    const next = rememberBridgeReconciliation(
+      prepared.next,
+      imported,
+      verifiedOptions,
+      this.data.athletes.map((a) => a.id),
+      this.dependencies.now(),
+    )
+    const checksums = new Set(imported.sessions.map((s) => s.source.checksum))
+    const batch = next.batches.find((b) => b.id === prepared.batch.id)!
+    batch.sourceChecks = checks.filter((check) => checksums.has(check.checksum))
+    this.commitArchive(next)
+    return structuredClone(batch)
+  }
+
+  revokeBridgeIdentity(
+    connectionId: string,
+    sourceName: string,
+    reason: string,
+    by: string,
+  ) {
+    if (!reason.trim() || !by.trim())
+      throw new Error('A revocation reason and coach are required.')
+    const next = this.getArchiveState()
+    const link = next.bridge?.identities.find(
+      (l) =>
+        l.active &&
+        l.connectionId === connectionId &&
+        l.sourceName === sourceName,
+    )
+    if (!link) throw new Error('Active source identity mapping not found.')
+    link.active = false
+    next.bridge!.audit.push({
+      connectionId,
+      sourceName,
+      athleteId: link.athleteId,
+      action: 'revoke',
+      reason,
+      by,
+      at: this.dependencies.now(),
+    })
+    this.commitArchive(next)
+  }
+
+  private prepareArchiveImport(
+    input: VerifiedArchiveExport,
+    fileName: string,
+    importedBy: string,
+  ) {
     if (!fileName.trim() || !importedBy.trim())
       throw new Error('Source filename and importing coach are required.')
     const review = this.reviewArchive(input)
@@ -752,8 +865,7 @@ export class InMemoryCoachingRepository implements CoachingRepository {
           session: structuredClone(session),
         })),
     )
-    this.commitArchive(next)
-    return structuredClone(batch)
+    return { next, batch }
   }
 
   rollbackArchiveBatch(batchId: string, reason: string, by: string) {

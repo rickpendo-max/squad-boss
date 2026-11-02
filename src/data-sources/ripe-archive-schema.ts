@@ -1,7 +1,7 @@
 const text = { type: 'string', minLength: 1, maxLength: 200, pattern: '\\S' }
 const timestamp = { type: 'string', format: 'date-time' }
 const meters = { type: ['number', 'null'], minimum: 0, maximum: 100000 }
-const verification = { enum: ['verified', 'provisional'] }
+const verification = { enum: ['verified', 'provisional', 'unverified'] }
 const object = (
   properties: Record<string, unknown>,
   required = Object.keys(properties),
@@ -10,6 +10,28 @@ const object = (
   additionalProperties: false,
   properties,
   required,
+})
+
+export const archivePerformanceSchema = object({
+  id: text,
+  resultType: { enum: ['competition', 'test', 'training'] },
+  distance: { type: 'integer', minimum: 1, maximum: 25000 },
+  stroke: {
+    enum: [
+      'freestyle',
+      'backstroke',
+      'breaststroke',
+      'butterfly',
+      'individual-medley',
+    ],
+  },
+  course: { enum: ['LCM', 'SCM'] },
+  totalSeconds: {
+    type: ['number', 'null'],
+    exclusiveMinimum: 0,
+    maximum: 86400,
+  },
+  verificationStatus: verification,
 })
 
 export const ripeArchiveSchema = {
@@ -53,27 +75,7 @@ export const ripeArchiveSchema = {
             performances: {
               type: 'array',
               maxItems: 100,
-              items: object({
-                id: text,
-                resultType: { enum: ['competition', 'test', 'training'] },
-                distance: { type: 'integer', minimum: 1, maximum: 25000 },
-                stroke: {
-                  enum: [
-                    'freestyle',
-                    'backstroke',
-                    'breaststroke',
-                    'butterfly',
-                    'individual-medley',
-                  ],
-                },
-                course: { enum: ['LCM', 'SCM'] },
-                totalSeconds: {
-                  type: ['number', 'null'],
-                  exclusiveMinimum: 0,
-                  maximum: 86400,
-                },
-                verificationStatus: verification,
-              }),
+              items: archivePerformanceSchema,
             },
           }),
         },

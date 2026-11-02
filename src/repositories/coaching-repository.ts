@@ -95,6 +95,19 @@ export interface CreatePerformanceResultInput {
 }
 
 export interface CoachingRepository {
+  importBridgeArchive(
+    raw: unknown,
+    options: import('../data-sources/ripe-bridge-v02-adapter').BridgeConversionOptions,
+    fileName: string,
+    by: string,
+    sourceFiles: import('../data-sources/bridge-local-files').ReadOnlySourceFile[],
+  ): Promise<import('../types/archive').ArchiveBatch>
+  revokeBridgeIdentity(
+    connectionId: string,
+    sourceName: string,
+    reason: string,
+    by: string,
+  ): void
   getArchiveState(): import('../types/archive').ArchiveState
   restoreArchiveBackup(text: string, by: string): void
   reviewArchive(
