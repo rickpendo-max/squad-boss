@@ -31,6 +31,19 @@ npm run build
 git diff --check
 ```
 
+Browser import regression tests use only synthetic data and an isolated Vite server
+on port 5175:
+
+```sh
+npx playwright install --with-deps chromium
+npm run test:browser
+```
+
+For a managed machine with Chromium already installed, use
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser`.
+See [PR #2 import verification](docs/pr-2-import-verification.md) for the tested
+Bridge wire variants, reconciliation rules and remaining real-archive limitation.
+
 ## Structure
 
 - `src/components` contains shared interface components.
