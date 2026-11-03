@@ -79,3 +79,14 @@ Until these are available, no production deployment or readiness claim is made. 
 - Re-ran all checks in this instance: 149 + 4 unit tests, 9 + 3 Chromium workflows, both builds/lints/whitespace checks pass. Added `scripts/verify-production.mjs`: two additional built-artifact checks pass with fictional records, temporary browser contexts and loopback-only targets. No application feature, dependency, schema, athlete fact or domain rule changed.
 - Prepared a private tested review release with source/build artifacts and checksums. No recurring automation, external notification or production deployment installed.
 - The three unavoidable owner actions are consolidated in the release report: apply/reconnect published policy, expose the actual Ripe service connection securely, transfer approved JSON/source/approval evidence first. Do not request SQLite or new secret values speculatively.
+
+## 4 November runtime recheck
+
+See [dated runtime evidence](release/runtime-check-20261104.md). Pinned release
+commits and both source bundles are preserved; all eight release checksums pass.
+The fresh runtime still excludes the two saved custom domains and returns proxy
+CONNECT 403; both PR creations still return Forbidden. The named Ripe connector,
+service bindings and approved Session 005–007 files are unavailable. The latest
+732-record/16-file checksum-verified backup is recorded as owner-reported only.
+One consolidated connection/filename/private-route request is pending. No live
+imports, permission claims, new schedules or repeated synthetic acceptance claims.
