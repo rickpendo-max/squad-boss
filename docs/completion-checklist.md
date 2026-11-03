@@ -67,3 +67,15 @@ Until these are available, no production deployment or readiness claim is made. 
 - Saved environment fields: repeatable install script, service startup/test instructions, the two exact domain requirements and both checkout identities/paths. Draft persistence is distinct from runtime policy application and publication.
 - Both review branches were pushed and their remote refs verified. New PR creation was attempted for both branches and failed with GitHub GraphQL `Forbidden`; no new PR is claimed. Existing PR #2's head ref was verified, but its review/merge state remains inaccessible.
 - No deployment was attempted: neither checkout supplies the live site's backend/deployment connection. No installed automation or verified production last-success schedule is claimed.
+
+## Continuation after reported publication
+
+- Preserved both pushed completion branches and re-fetched their remote refs; no unrelated work overwritten.
+- Live retry at 2026-11-03T09:32:32Z / 19:32:32 Brisbane failed before TLS/application access: `curl: (56) CONNECT tunnel failed, response 403`; proxy header `HTTP/1.1 403 Forbidden`, `server: envoy`.
+- Current task runtime still reports custom allowed hosts `[]` and spec revision 1; the inspected saved draft has both requested domains at revision 5. Publication is owner-reported; policy propagation/reconnection to this task is not established.
+- Both PR creations retried and still return `Post "https://api.github.com/graphql": Forbidden`. Direct compare URLs and release instructions: [review release](release/review-release.md).
+- Inspected actual connection paths in both repositories: browser localStorage only, no live backend driver/client/deployment binding. No Ripe tool, secret/runtime binding or outbound identity is available to this task. The identity manifest contains no connections. Precise findings and service handoff capabilities: [service connection](release/service-connection.md).
+- Searched supplied workspace for approved exports/source/SQLite: only the existing explicitly synthetic export fixture was found. Real validation, current-record reconciliation, Maddie permissions/persistence and live backup remain blocked; none are marked complete.
+- Re-ran all checks in this instance: 149 + 4 unit tests, 9 + 3 Chromium workflows, both builds/lints/whitespace checks pass. Added `scripts/verify-production.mjs`: two additional built-artifact checks pass with fictional records, temporary browser contexts and loopback-only targets. No application feature, dependency, schema, athlete fact or domain rule changed.
+- Prepared a private tested review release with source/build artifacts and checksums. No recurring automation, external notification or production deployment installed.
+- The three unavoidable owner actions are consolidated in the release report: apply/reconnect published policy, expose the actual Ripe service connection securely, transfer approved JSON/source/approval evidence first. Do not request SQLite or new secret values speculatively.
