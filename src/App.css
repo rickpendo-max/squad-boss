@@ -1575,3 +1575,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
     transform: rotate(90deg);
   }
 }
+
+.season-dates { display: flex; flex-wrap: wrap; gap: 1rem; }
+.season-dates label { display: grid; gap: .4rem; }
+.season-dates input { color-scheme: dark; background: #102d38; color: #f1f8fa; border: 1px solid #50717a; border-radius: .4rem; padding: .55rem; max-width: 100%; }
+.ripe-data-list meter { accent-color: #61d8bd; width: clamp(3rem, 18vw, 14rem); }
+@media (max-width: 600px) { .ripe-data-list li { flex-wrap: wrap; gap: .6rem; } }

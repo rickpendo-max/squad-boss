@@ -108,7 +108,7 @@ test('Bridge file upload, reconciliation, import, reload and duplicates preserve
   await page
     .getByRole('button', { name: 'Import 3 ready sessions', exact: true })
     .click()
-  await expect(page.getByText('8,300 m', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Partial total · 1 session distance missing', {
       exact: true,
@@ -126,7 +126,7 @@ test('Bridge file upload, reconciliation, import, reload and duplicates preserve
   expect(saved).not.toContain('source_location')
   expect(await page.locator('body').innerText()).not.toContain('PRIVATE')
   await openImport(page)
-  await expect(page.getByText('8,300 m', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   await upload(page)
   await reconcile(page)
   await expect(
@@ -161,13 +161,13 @@ test('changed source conflicts, backup restores into a fresh browser, and rollba
   await expect(
     page.getByRole('button', { name: 'Import 0 ready sessions', exact: true }),
   ).toBeDisabled()
-  await expect(page.getByText('8,300 m', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   await page
     .getByRole('button', { name: 'Review rollback of synthetic-bridge.json' })
     .click()
   await page.getByLabel('Rollback reason').fill('Synthetic workflow test')
   await page.getByRole('button', { name: 'Confirm batch rollback' }).click()
-  await expect(page.getByText('8,300 m', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toHaveCount(0)
   await expect(page.locator('.ripe-import [role="status"]')).toContainText(
     'Batch rolled back',
   )
@@ -197,7 +197,7 @@ test('changed source conflicts, backup restores into a fresh browser, and rollba
     await recovered
       .getByLabel('Current athlete', { exact: true })
       .selectOption('demo-athlete-001')
-    await expect(recovered.getByText('8,300 m', { exact: true })).toBeVisible()
+    await expect(recovered.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   } finally {
     await context.close()
   }
@@ -328,7 +328,7 @@ test('local .ripe_bridge folder imports feed attendance, volume and measured int
   await page
     .getByRole('button', { name: 'Import 3 ready sessions', exact: true })
     .click()
-  await expect(page.getByText('8,300 m', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   expect(await readFile(`${directory}/verified-export.json`, 'utf8')).toBe(
     exportText,
   )
@@ -417,7 +417,7 @@ test('local .ripe_bridge folder imports feed attendance, volume and measured int
     await page
       .getByRole('button', { name: 'Import 1 ready sessions', exact: true })
       .click()
-    await expect(page.getByText(expectedVolume, { exact: true })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Season overview' }).getByText(expectedVolume, { exact: true })).toBeVisible()
     await expect(
       page.getByText(`${total.toFixed(2)} s`, { exact: true }).first(),
     ).toBeVisible()
@@ -476,7 +476,7 @@ test('source mismatch blocks browser import and saved mapping revocation preserv
     await page.evaluate((key) => localStorage.getItem(key), storageKey),
   ).toBeNull()
   await importBridge(page)
-  await expect(page.getByText('8,300 m', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   await page
     .getByText('Saved Bridge identities & audit', { exact: true })
     .click()
@@ -485,7 +485,7 @@ test('source mismatch blocks browser import and saved mapping revocation preserv
     .getByLabel('Identity revocation reason')
     .fill('Synthetic roster verification changed')
   await page.getByRole('button', { name: 'Revoke selected identity' }).click()
-  await expect(page.getByText('8,300 m', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Season overview' }).getByText('8,300 m', { exact: true })).toBeVisible()
   await upload(page)
   await expect(page.getByLabel('Source athlete: Fictional One')).toHaveValue('')
   await expect(page.getByLabel('Source athlete: Fictional One')).toBeEnabled()
@@ -499,4 +499,24 @@ test('source mismatch blocks browser import and saved mapping revocation preserv
     ),
   ).toBe(true)
   expect(state.sessions).toHaveLength(3)
+})
+
+test('season controls filter actual distance, reject invalid ranges and remain usable on mobile', async ({ page }) => {
+  await openImport(page)
+  await importBridge(page)
+  const season = page.getByRole('region', { name: 'Season overview' })
+  await expect(season).toContainText('8,300 m')
+  await page.getByLabel('Season start').fill('2026-10-30')
+  await page.getByLabel('Season end').fill('2026-10-30')
+  await expect(season).toContainText('Not recorded')
+  await expect(season).not.toContainText('8,300 m')
+  await page.getByLabel('Season end').fill('2026-10-29')
+  await expect(season.getByRole('alert')).toContainText('Choose valid season dates')
+  await page.getByLabel('Season start').fill('2026-10-29')
+  await expect(season.getByRole('alert')).toHaveCount(0)
+  await expect(season).toContainText('8,300 m')
+  await expect(page.getByRole('meter')).toHaveAttribute('value', '8300')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByLabel('Season start')).toBeVisible()
+  expect(await page.getByLabel('Season end').evaluate((el) => el.getBoundingClientRect().right)).toBeLessThanOrEqual(390)
 })

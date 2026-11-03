@@ -2,7 +2,9 @@ import { useState, useSyncExternalStore } from 'react'
 import Card from '../../components/Card'
 import {
   athleteTrainingSummary,
-  recordedPersonalBests,
+  brisbaneDate,
+  validateSeason,
+  verifiedPersonalBests,
 } from '../../domain/athlete-workspace'
 import { coachingRepository } from '../../repositories/in-memory-coaching-repository'
 import type { Athlete } from '../../types/athlete'
@@ -12,23 +14,16 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
     coachingRepository.subscribe,
     coachingRepository.getRevision,
   )
-  const [year, setYear] = useState(String(new Date().getFullYear()))
+  const year = brisbaneDate(new Date().toISOString()).slice(0, 4)
+  const [season, setSeason] = useState({ startDate: `${year}-01-01`, endDate: `${year}-12-31` })
+  const validSeason = validateSeason(season)
   const state = coachingRepository.getArchiveState()
-  const summary = athleteTrainingSummary(state, athlete.id, year)
+  const summary = athleteTrainingSummary(state, athlete.id, validSeason ? season : { startDate: `${year}-01-01`, endDate: `${year}-12-31` })
   const results = coachingRepository.getPerformanceResultsByAthleteId(
     athlete.id,
   )
-  const bests = recordedPersonalBests(results)
+  const bests = verifiedPersonalBests(results)
   const tests = results.filter((r) => r.resultType === 'test')
-  const years = [
-    ...new Set([
-      String(new Date().getFullYear()),
-      year,
-      ...state.sessions.map((s) => s.session.startsAt.slice(0, 4)),
-    ]),
-  ]
-    .sort()
-    .reverse()
   return (
     <>
       <section className="ripe-hero">
@@ -51,19 +46,14 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
             <span className="eyebrow">Verified archive records</span>
             <h3>Season overview</h3>
           </div>
-          <label>
-            Calendar year{' '}
-            <select
-              aria-label="Calendar year"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-            >
-              {years.map((y) => (
-                <option key={y}>{y}</option>
-              ))}
-            </select>
-          </label>
+          <div className="season-dates">
+            <label>Season start <input type="date" value={season.startDate}
+              onChange={(e) => setSeason({ ...season, startDate: e.target.value })} /></label>
+            <label>Season end <input type="date" value={season.endDate}
+              onChange={(e) => setSeason({ ...season, endDate: e.target.value })} /></label>
+          </div>
         </div>
+        {!validSeason && <p role="alert">Choose valid season dates, with the end on or after the start. Showing the current calendar year until corrected.</p>}
         <div className="ripe-metrics">
           <div>
             <span>Attendance</span>
@@ -100,7 +90,7 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
           </div>
         </div>
         <p className="ripe-muted">
-          Calendar-year view, using source-local session dates.{' '}
+          Selected season includes both boundary dates in Australia/Brisbane. The default is the current calendar year, not a coach-approved season.{' '}
           {summary.missingTimes} missing times remain missing. Distance is
           volume, not a physiological load estimate.
         </p>
@@ -123,7 +113,7 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
                       <strong>{session.title}</strong>
                       <br />
                       <small>
-                        {session.startsAt.slice(0, 10)} ·{' '}
+                        {brisbaneDate(session.startsAt)} ·{' '}
                         {session.source.fileName}
                       </small>
                     </td>
@@ -144,14 +134,23 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
             </table>
           </div>
         ) : (
-          <p>No verified session imports for this athlete and year.</p>
+          <p>No verified session imports for this athlete and season.</p>
         )}
       </section>
+      {summary.weeks.length > 0 && <Card eyebrow="Selected season · Brisbane Monday weeks" title="Weekly completed distance">
+        <ul className="ripe-data-list">
+          {summary.weeks.map((week) => <li key={week.week}>
+            <span>Week of {week.week}<small>{week.missingDistance ? `${week.missingDistance} missing distances · partial total` : 'Recorded actual distance'}</small></span>
+            <meter min={0} max={Math.max(1, ...summary.weeks.map((w) => w.completedMeters))}
+              value={week.completedMeters} aria-label={`Week of ${week.week} recorded metres`} />
+            <strong>{week.completedMeters.toLocaleString()} m</strong>
+          </li>)}
+        </ul>
+      </Card>}
       <div className="ripe-grid">
-        <Card eyebrow="Comparable recorded results" title="Personal bests">
+        <Card eyebrow="Comparable verified results" title="Verified recorded bests">
           <p>
-            Grouped by event, course and result type; legacy profile PBs remain
-            below.
+            Verified recorded best times grouped by event, course and result type. These are not necessarily lifetime PBs. Unverified results remain available in performance comparison.
           </p>
           {bests.length ? (
             <ul className="ripe-data-list">
@@ -162,16 +161,16 @@ export default function IntegratedWorkspace({ athlete }: { athlete: Athlete }) {
                     <small>
                       {r.occurredAt.slice(0, 10)} ·{' '}
                       {r.archiveProvenance
-                        ? 'Verified archive'
-                        : 'Existing result record'}
+                        ? `${r.archiveProvenance.sourceFileName} · ${r.archiveProvenance.sessionId}`
+                        : r.importMetadata?.sourceFileName ?? 'Manual record · source verification not recorded'}
                     </small>
                   </span>
-                  <strong>{r.totalSeconds.toFixed(2)} s</strong>
+                  <strong>{r.totalSeconds.toFixed(2)} s<small>{r.archiveProvenance || r.importMetadata?.verified === true || r.importMetadata?.verificationStatus === 'verified' ? 'Verified source' : 'Verification not recorded'}</small></strong>
                 </li>
               ))}
             </ul>
           ) : (
-            <p>No recorded performance results.</p>
+            <p>No source-verified performance results recorded. This profile is incomplete; legacy seed PBs are not promoted to verified records.</p>
           )}
         </Card>
         <Card

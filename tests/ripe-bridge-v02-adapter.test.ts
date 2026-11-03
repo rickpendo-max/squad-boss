@@ -133,7 +133,10 @@ test('date-only metadata and impossible offset-qualified timestamps fail closed'
 test('date and period reconciliation cannot contradict source metadata', () => {
   const reconciliation = options()
   reconciliation.startsAtBySessionId.A = '2026-10-30T06:00:00+10:00'
-  assert.throws(() => adaptBridgeV02(bridge(), reconciliation), /confirmed/)
+  assert.throws(
+    () => adaptBridgeV02(bridge(), reconciliation),
+    /session A start date 2026-10-30 does not match verified source date 2026-10-29/,
+  )
   const input = bridge()
   Object.assign(input.sessions[1].record, { period: 'AM' })
   assert.throws(
