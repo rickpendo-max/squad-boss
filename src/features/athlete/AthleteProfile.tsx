@@ -37,8 +37,8 @@ function AthleteProfile() {
       <details className="coaching-record">
         <summary>Coaching Record</summary>
         <div className="coaching-record-content">
-          <ObservationPanel athleteId={selectedAthlete.id} />
-          <InterpretationPanel athleteId={selectedAthlete.id} />
+          <ObservationPanel key={`observations:${selectedAthlete.id}`} athleteId={selectedAthlete.id} />
+          <InterpretationPanel key={`interpretations:${selectedAthlete.id}`} athleteId={selectedAthlete.id} />
           <PriorityPanel
             key={selectedAthlete.id}
             athleteId={selectedAthlete.id}

@@ -1,3 +1,4 @@
+import { confirmDiscardChanges } from '../domain/unsaved-changes'
 import { useAthlete } from '../context/useAthlete'
 
 export default function AthleteSelector() {
@@ -19,7 +20,7 @@ export default function AthleteSelector() {
             (a) => a.id === event.target.value
           )
 
-          if (athlete) {
+          if (athlete && athlete.id !== selectedAthlete.id && confirmDiscardChanges()) {
             setSelectedAthlete(athlete)
           }
         }}

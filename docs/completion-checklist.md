@@ -27,13 +27,15 @@ The production completion standard has **not** been met.
 - [x] Exact completed metres, missing-distance counts and weekly chart; planned distance remains separate. Summaries derive from active archive records, so rollback removes totals without deleting original evidence.
 - [x] Verified recorded bests require explicit archive/CSV verification. Faster unverified records and legacy seed PBs cannot become verified bests. Event/course/type/date/source shown; lifetime PB completeness is not asserted.
 - [x] Existing duplicate, conflict, identity reconciliation, source checksum, rollback, reload and archive download/recovery paths exercised in Chromium with fictional data.
+- [x] Navigation/page-exit warnings protect pending coaching, CSV, performance and archive review forms. Confirmed athlete switches reset observation/interpretation drafts so they cannot be submitted under another athlete.
 - [x] Responsive season inputs checked at 390px viewport.
-- [x] `npm test`: all 8 files pass. Detailed run: **148 tests passed, 0 failed/skipped**.
-- [x] Chromium: **8 workflow tests passed**, including fresh-browser archive recovery and repeat import protection. These are synthetic checks, not authenticated staff/athlete isolation tests.
+- [x] `npm test`: all 9 files pass. Detailed run: **149 tests passed, 0 failed/skipped**.
+- [x] Chromium: **9 workflow tests passed**, including fresh-browser archive recovery and repeat import protection. These are synthetic checks, not authenticated staff/athlete isolation tests.
 - [x] Production build, lint and `git diff --check` pass. Saved development startup command starts Vite; HTTP GET returns Ripe index.
 
-New files: this checklist and `tests/season-summary.test.ts`.
+New files: this checklist, `tests/season-summary.test.ts`, `tests/unsaved-changes.test.ts`, `src/domain/unsaved-changes.ts` and `src/hooks/useUnsavedChanges.ts`.
 Modified: `src/domain/athlete-workspace.ts`, `src/features/athlete/IntegratedWorkspace.tsx`, `src/App.css`, `tests/browser/archive-import.spec.ts`, `tests/ripe-bridge-v02-adapter.test.ts` (stale error-message assertion corrected without weakening date-conflict rejection).
+Also modified navigation/athlete selection and the observation, interpretation, priority, performance, CSV and archive panels for pending-change warnings; athlete profile keys prevent drafts following another athlete.
 No new dependency, schema migration, benchmark or athlete fact. Existing architecture, branding, archive/repository boundary and source approval gates retained.
 
 ## Required live completion, blocked on source/service access
@@ -51,8 +53,8 @@ No new dependency, schema migration, benchmark or athlete fact. Existing archite
 ## Handover and access actions
 
 1. Authorise/attach `rickpendo-max/Squadboss` to this environment.
-2. Review/save the environment draft's exact site-domain addition and setup/start instructions, then publish the environment. Saving this draft did not apply network access or deploy the app.
-3. Securely transfer the approved exports, original source material and a protected SQLite snapshot, or provide an authorised connection to the Windows host. Enter any service credentials only in environment settings.
+2. Review/save the environment draft's exact site-domain and `api.github.com` additions and setup/start instructions, then publish the environment. Saving this draft did not apply network access or deploy the app.
+3. Securely transfer approved JSON exports and their original source material first, or provide an authorised connection to the Windows host. Request a protected SQLite snapshot only if the exports cannot resolve an essential fact. Enter any service credentials only in environment settings.
 4. Supply the live Ripe service connection with database/backup/scheduler inspection and controlled test-account access; no secret values in chat.
 
 Until these are available, no production deployment or readiness claim is made. No notifications, invitations, new schedules or external messages were sent.

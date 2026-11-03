@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useRef, useState } from 'react'
 import {
   MAX_ARCHIVE_BYTES,
@@ -56,6 +57,7 @@ export default function ArchiveImportPanel({
   const request = useRef(0)
   const rows = input ? coachingRepository.reviewArchive(input) : []
   const ready = rows.filter((r) => r.status === 'ready').length
+  useUnsavedChanges(busy || ready > 0 || Boolean(bridge && !input) || Boolean(reason.trim()) || Boolean(revokeReason.trim()))
   const state = coachingRepository.getArchiveState()
   const athletes = coachingRepository.listAthletes()
   const savedLinks = (state.bridge?.identities ?? []).filter(

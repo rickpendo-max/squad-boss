@@ -1,3 +1,5 @@
+import { confirmDiscardChanges } from '../domain/unsaved-changes'
+
 type NavigationProps = {
   activeView: 'dashboard' | 'athlete-profile'
   onNavigate: (view: 'dashboard' | 'athlete-profile') => void
@@ -10,7 +12,7 @@ function Navigation({ activeView, onNavigate }: NavigationProps) {
         <button
           type="button"
           className={`nav-item ${activeView === 'dashboard' ? 'active' : ''}`}
-          onClick={() => onNavigate('dashboard')}
+          onClick={() => { if (activeView !== 'dashboard' && confirmDiscardChanges()) onNavigate('dashboard') }}
         >
           Squad overview
         </button>
@@ -18,7 +20,7 @@ function Navigation({ activeView, onNavigate }: NavigationProps) {
         <button
           type="button"
           className={`nav-item ${activeView === 'athlete-profile' ? 'active' : ''}`}
-          onClick={() => onNavigate('athlete-profile')}
+          onClick={() => { if (activeView !== 'athlete-profile' && confirmDiscardChanges()) onNavigate('athlete-profile') }}
         >
           Athlete workspace
         </button>

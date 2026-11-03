@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 
@@ -40,6 +41,7 @@ function PriorityPanel({ athleteId }: { athleteId: string }) {
       .filter((priority) => priority.status === 'active'),
   )
   const [form, setForm] = useState(initialForm)
+  useUnsavedChanges(JSON.stringify(form) !== JSON.stringify(initialForm))
   const [error, setError] = useState('')
   const interpretations =
     coachingRepository.getInterpretationsByAthleteId(athleteId)

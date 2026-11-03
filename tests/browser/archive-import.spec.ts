@@ -520,3 +520,22 @@ test('season controls filter actual distance, reject invalid ranges and remain u
   await expect(page.getByLabel('Season start')).toBeVisible()
   expect(await page.getByLabel('Season end').evaluate((el) => el.getBoundingClientRect().right)).toBeLessThanOrEqual(390)
 })
+
+test('unsaved coaching draft blocks navigation and cannot follow a different athlete', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Current athlete', { exact: true }).selectOption('demo-athlete-001')
+  await page.getByText('Coaching Record', { exact: true }).click()
+  const summary = page.locator('.observation-form textarea').first()
+  await summary.fill('Fictional unsaved draft')
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.getByRole('button', { name: 'Squad overview', exact: true }).click()
+  await expect(summary).toHaveValue('Fictional unsaved draft')
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.getByLabel('Current athlete', { exact: true }).selectOption('maddie-mcternan')
+  await expect(page.getByLabel('Current athlete', { exact: true })).toHaveValue('demo-athlete-001')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByLabel('Current athlete', { exact: true }).selectOption('maddie-mcternan')
+  await expect(summary).toHaveValue('')
+  // No athlete facts are submitted or stored during this navigation check.
+  expect(await page.evaluate(() => localStorage.getItem('squad-boss:coaching-data'))).toBeNull()
+})

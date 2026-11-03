@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useReducer, useState } from 'react'
 import type { FormEvent } from 'react'
 
@@ -32,6 +33,7 @@ function displayDate(value: string) {
 function ObservationPanel({ athleteId }: { athleteId: string }) {
   const [, refreshHistory] = useReducer((version: number) => version + 1, 0)
   const [form, setForm] = useState(initialForm)
+  useUnsavedChanges(JSON.stringify(form) !== JSON.stringify(initialForm))
   const [error, setError] = useState('')
   const observations =
     coachingRepository.listObservationsForAthlete(athleteId)

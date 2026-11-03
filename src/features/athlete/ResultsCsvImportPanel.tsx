@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useState } from 'react'
 import type { ChangeEvent } from 'react'
 
@@ -57,6 +58,7 @@ function ResultsCsvImportPanel({
     existingResults,
   )
   const newRows = previewRows.filter((row) => row.result && !row.duplicate)
+  useUnsavedChanges(newRows.some((row) => selectedRows.has(row.rowNumber)))
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]

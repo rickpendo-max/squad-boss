@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
@@ -315,6 +316,7 @@ function PerformanceComparisonPanel({ athleteId }: { athleteId: string }) {
     coachingRepository.getPerformanceResultsByAthleteId(athleteId),
   )
   const [form, setForm] = useState(initialForm)
+  useUnsavedChanges(JSON.stringify(form) !== JSON.stringify(initialForm()))
   const [error, setError] = useState('')
   const [editingResultId, setEditingResultId] = useState<string>()
   const [selectedResultId, setSelectedResultId] = useState<string>()
